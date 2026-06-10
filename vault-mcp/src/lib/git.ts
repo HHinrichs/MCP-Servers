@@ -12,12 +12,18 @@ if (!REPO_PATH || !REPO_REMOTE || !SSH_KEY_PATH) {
   throw new Error("VAULT_REPO_PATH, VAULT_REPO_REMOTE, SSH_KEY_PATH must be set");
 }
 
-// Force git to use our deploy key, skip strict host checking for the initial clone.
-const GIT_SSH_COMMAND = `ssh -i ${SSH_KEY_PATH} -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes`;
+// Configure git's SSH command via env var — git reads it natively, no need
+// for simple-git's `allowUnsafeSshCommand` opt-in. known_hosts is written to
+// /tmp because the container's $HOME (/home/node) is read-only-ish without prep.
+process.env.GIT_SSH_COMMAND = [
+  "ssh",
+  `-i ${SSH_KEY_PATH}`,
+  "-o IdentitiesOnly=yes",
+  "-o UserKnownHostsFile=/tmp/known_hosts",
+  "-o StrictHostKeyChecking=accept-new",
+].join(" ");
 
-const git: SimpleGit = simpleGit(REPO_PATH, {
-  config: [`core.sshCommand=${GIT_SSH_COMMAND}`],
-});
+const git: SimpleGit = simpleGit(REPO_PATH);
 
 export function vaultPath(...segments: string[]): string {
   return path.join(REPO_PATH!, ...segments);
@@ -27,20 +33,16 @@ export async function ensureRepoCloned(): Promise<void> {
   const fs = await import("node:fs/promises");
   try {
     await fs.access(path.join(REPO_PATH!, ".git"));
-    // Already present, just fetch latest.
+    console.log(`[git] repo present at ${REPO_PATH}, fetching latest`);
     await git.fetch().pull("origin", "main", { "--rebase": "true" });
   } catch {
     console.log(`[git] cloning ${REPO_REMOTE} -> ${REPO_PATH}`);
     const parent = path.dirname(REPO_PATH!);
     await fs.mkdir(parent, { recursive: true });
-    await simpleGit({ config: [`core.sshCommand=${GIT_SSH_COMMAND}`] }).clone(
-      REPO_REMOTE!,
-      REPO_PATH!,
-    );
+    await simpleGit().clone(REPO_REMOTE!, REPO_PATH!);
   }
   await git.addConfig("user.name", AUTHOR_NAME, false, "local");
   await git.addConfig("user.email", AUTHOR_EMAIL, false, "local");
-  await git.addConfig("core.sshCommand", GIT_SSH_COMMAND, false, "local");
 }
 
 // --- Debounced commit + push ---

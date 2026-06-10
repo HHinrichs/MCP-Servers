@@ -3,6 +3,7 @@ import { quickDumpTool } from "./quick_dump.js";
 import { addToProjectTool } from "./add_to_project.js";
 import { addToAreaTool } from "./add_to_area.js";
 import { addToResourceTool } from "./add_to_resource.js";
+import { addToContextTool } from "./add_to_context.js";
 import { updateDailyTool } from "./update_daily.js";
 import { searchNotesTool } from "./search_notes.js";
 import { findSimilarTool } from "./find_similar.js";
@@ -16,6 +17,7 @@ const ALL_TOOLS = [
   addToProjectTool,
   addToAreaTool,
   addToResourceTool,
+  addToContextTool,
   updateDailyTool,
   searchNotesTool,
   findSimilarTool,

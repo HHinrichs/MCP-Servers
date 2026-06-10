@@ -93,7 +93,9 @@ export async function writeMarkdown(
   body: string,
 ): Promise<void> {
   await ensureDir(absPath);
-  const fm = { ...frontmatter, updated: todayBerlin() };
+  // Use minute-resolution timestamp so multiple edits on the same day
+  // can be distinguished from the frontmatter alone.
+  const fm = { ...frontmatter, updated: timestampBerlin() };
   const serialized = matter.stringify(body, fm);
   await fs.writeFile(absPath, serialized, "utf8");
 }
@@ -180,6 +182,13 @@ export function areaFile(area: string): string {
 export function resourceFile(topic: string): string {
   const safe = safeName(topic);
   return vaultPath(VAULT_DIRS.ressourcen, safe, `${safe}.md`);
+}
+
+export const KONTEXT_FILES = ["Über das Produkt", "Zielgruppe", "Pitch", "Vision"] as const;
+export type KontextFile = (typeof KONTEXT_FILES)[number];
+
+export function kontextFile(name: KontextFile): string {
+  return vaultPath(VAULT_DIRS.kontext, `${name}.md`);
 }
 
 /** Resolve a user-supplied relative path against the vault root, refusing any escape. */

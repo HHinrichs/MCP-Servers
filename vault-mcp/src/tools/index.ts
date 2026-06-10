@@ -9,6 +9,7 @@ import { findSimilarTool } from "./find_similar.js";
 import { readNoteTool } from "./read_note.js";
 import { listInboxTool } from "./list_inbox.js";
 import { moveNoteTool } from "./move_note.js";
+import { getBriefingTool } from "./get_briefing.js";
 
 const ALL_TOOLS = [
   quickDumpTool,
@@ -21,6 +22,7 @@ const ALL_TOOLS = [
   readNoteTool,
   listInboxTool,
   moveNoteTool,
+  getBriefingTool,
 ];
 
 export function registerAllTools(server: McpServer): void {

@@ -54,9 +54,12 @@ triage them now — don't auto-triage.
 ## ANTI-SPRAWL: find_similar BEFORE add_to_*
 
 Before every add_to_project / add_to_area / add_to_resource: call find_similar
-with the core text. If a hit ≥ 0.15 in the target folder exists, extend THAT
-note (point the add_to_* tool at it, pick a fitting section) instead of
-creating a new file. Only create a new project/area/resource when nothing fits.
+with the core text. If a hit ≥ 0.15 in the target folder exists, *consider*
+extending that note instead of creating a new file. The score is a strong
+hint, not a command — you decide based on actual thematic fit. A coincidental
+keyword overlap is not a reason to merge unrelated content. When you do
+extend, point the add_to_* tool at the existing note and pick a fitting
+section; when you decide against it, briefly say why in your reply.
 
 quick_dump and update_daily are append-only logs — no pre-search needed.
 
@@ -65,10 +68,15 @@ quick_dump and update_daily are append-only logs — no pre-search needed.
 add_to_* responses carry a hint:
 - ok   → silent, keep appending.
 - warn → ~300 lines, plan to split a subtopic next time.
-- hard → ~600 lines, STOP appending. Propose a split to Hannes. Splitting
-  rule: projects → make 02 Projekte/<Project>/ a folder and pull the bloated
-  subtopic into <Project>/<Subtopic>.md, link via [[Subtopic]]. Areas/
-  Resources are already folders → drop a sibling <Area>/<Subtopic>.md.
+- hard → ~600 lines, strongly prefer splitting before appending more.
+  Exception: if the new entry is small (a few lines) AND fits perfectly
+  under an existing section, you may still append it and just flag the
+  size in your reply. For anything bigger or thematically standalone:
+  propose the split first.
+
+  Splitting rule: projects → make 02 Projekte/<Project>/ a folder and pull
+  the bloated subtopic into <Project>/<Subtopic>.md, link via [[Subtopic]].
+  Areas/Resources are already folders → drop a sibling <Area>/<Subtopic>.md.
   Hannes finishes the split manually for now (no edit/delete tool yet).
 
 ## CROSS-LINKING (the brain in second brain)

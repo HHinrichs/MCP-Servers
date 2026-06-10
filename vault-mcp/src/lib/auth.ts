@@ -1,7 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 
-const expectedToken = process.env.MCP_BEARER_TOKEN;
+// Trim so trailing newlines / whitespace from Coolify-UI paste don't break
+// the constant-time match.
+const expectedToken = (process.env.MCP_BEARER_TOKEN ?? "").trim();
 if (!expectedToken) {
   throw new Error("MCP_BEARER_TOKEN must be set");
 }
@@ -14,7 +16,7 @@ const allowedOrigins = (process.env.MCP_ALLOWED_ORIGINS ?? "")
 const expectedTokenBuf = Buffer.from(expectedToken);
 
 function safeTokenEquals(provided: string): boolean {
-  const buf = Buffer.from(provided);
+  const buf = Buffer.from(provided.trim());
   if (buf.length !== expectedTokenBuf.length) return false;
   return timingSafeEqual(buf, expectedTokenBuf);
 }

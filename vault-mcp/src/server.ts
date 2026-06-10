@@ -66,6 +66,38 @@ CONVENTIONS
   defaults).
 
 ===========================================================
+KEEP NOTES FOCUSED — anti-sprawl, anti-monolith both
+===========================================================
+The find_similar workflow exists to prevent duplicate mini-files. The flip
+side is just as important: notes must stay focused. add_to_* responses
+include a size hint:
+
+- "ok"   — small file, append freely.
+- "warn" — file is getting long (~300+ lines). For the NEXT addition, look
+           for an opportunity to split off a subtopic.
+- "hard" — file is too long (~600+ lines). Do NOT just keep appending. Tell
+           Hannes the topic that's bloating it and propose a split:
+
+  Splitting strategy by folder type:
+  • 02 Projekte/<Project>.md           → make 02 Projekte/<Project>/ a folder,
+                                          move main content into <Project>/<Project>.md
+                                          (or keep it as an index), extract the bloated
+                                          subtopic into <Project>/<Subtopic>.md, link
+                                          via [[Subtopic]]. Use move_note to relocate
+                                          the original .md if needed.
+  • 03 Bereiche/<Area>/<Area>.md       → the folder already exists. Create
+                                          03 Bereiche/<Area>/<Subtopic>.md alongside it
+                                          and link via [[<Subtopic>]] from the main area
+                                          file.
+  • 04 Ressourcen/<Topic>/<Topic>.md   → same as areas — drop a sibling
+                                          <Topic>/<Subtopic>.md.
+
+You cannot fully execute a split yourself today (no delete/edit-section
+tool yet). On hard warnings, propose the split and stop appending; the user
+will either run the split manually or extend the toolset. On soft warnings,
+just mention the warning in your reply so the user is aware.
+
+===========================================================
 DESTRUCTIVE ACTIONS
 ===========================================================
 Never delete or overwrite a file. The tools are append-only by design. If something

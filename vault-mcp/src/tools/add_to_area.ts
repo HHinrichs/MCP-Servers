@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { markDirty } from "../lib/git.js";
-import { appendUnderSection, areaFile, timestampBerlin } from "../lib/vault.js";
+import { appendUnderSection, areaFile, noteSizeHint, timestampBerlin } from "../lib/vault.js";
 
 export const addToAreaTool = {
   name: "add_to_area",
   description:
-    "Append text to a section in an area file under 03 Bereiche/<area>/. Areas are ongoing responsibilities without an end date (e.g. 'Hostinger', 'Coolify'). REQUIRED WORKFLOW: call find_similar first with the new text — if it returns a hit in 03 Bereiche/ with score ≥ 0.15, target the existing area file rather than creating a new one.",
+    "Append text to a section in an area file under 03 Bereiche/<area>/. Areas are ongoing responsibilities without an end date (e.g. 'Hostinger', 'Coolify'). REQUIRED WORKFLOW: call find_similar first with the new text — if it returns a hit in 03 Bereiche/ with score ≥ 0.15, target the existing area file rather than creating a new one. The response includes a size hint — if the area file is large, consider creating a subtopic file in the same folder.",
   inputSchema: {
     area: z.string().min(1).describe("Area name (matches the folder name in 03 Bereiche/)."),
     section: z.string().min(1).describe("Heading under which to append, without '##'."),
@@ -21,17 +21,16 @@ export const addToAreaTool = {
     text: string;
   }) => {
     const stamp = timestampBerlin();
-    await appendUnderSection(
-      areaFile(area),
-      section,
-      `- _(${stamp})_ ${text}\n`,
-      { title: area, tags: ["bereich"] },
-    );
+    const target = areaFile(area);
+    await appendUnderSection(target, section, `- _(${stamp})_ ${text}\n`, {
+      title: area,
+      tags: ["bereich"],
+    });
     markDirty(`add_to_area ${area} / ${section}`);
-    return {
-      content: [
-        { type: "text" as const, text: `Zu '${area}' → ## ${section} hinzugefügt.` },
-      ],
-    };
+    const hint = await noteSizeHint(target);
+    const body =
+      `Zu '${area}' → ## ${section} hinzugefügt.` +
+      (hint.message ? `\n\n${hint.message}` : "");
+    return { content: [{ type: "text" as const, text: body }] };
   },
 };

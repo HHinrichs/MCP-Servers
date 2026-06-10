@@ -176,6 +176,42 @@ export function resolveVaultPath(rel: string): string {
   return target;
 }
 
+// --- Size awareness ---
+
+/** Soft warning: file is getting large, watch out. */
+export const SIZE_WARN_LINES = 300;
+/** Hard warning: file should be split. */
+export const SIZE_HARD_LINES = 600;
+
+export interface NoteSizeHint {
+  lines: number;
+  level: "ok" | "warn" | "hard";
+  message: string;
+}
+
+export async function noteSizeHint(absPath: string): Promise<NoteSizeHint> {
+  const content = await readIfExists(absPath);
+  if (content === null) return { lines: 0, level: "ok", message: "" };
+  const lines = content.split(/\r?\n/).length;
+  if (lines >= SIZE_HARD_LINES) {
+    return {
+      lines,
+      level: "hard",
+      message:
+        `⚠ Datei ist mit ${lines} Zeilen sehr groß — bitte spalten: extrahiere ein passendes Thema in eine eigene .md (für Bereiche/Ressourcen im selben Ordner, für Projekte in einen Unterordner) und verlinke per Wikilink. Erst danach hier weiter anhängen.`,
+    };
+  }
+  if (lines >= SIZE_WARN_LINES) {
+    return {
+      lines,
+      level: "warn",
+      message:
+        `Hinweis: Datei hat ${lines} Zeilen. Wird sie mit dem nächsten Eintrag nochmal deutlich länger, lieber ein Subthema in eine separate .md auslagern.`,
+    };
+  }
+  return { lines, level: "ok", message: "" };
+}
+
 // --- Walking the vault ---
 
 export async function walkMarkdown(rootRel: string = ""): Promise<string[]> {

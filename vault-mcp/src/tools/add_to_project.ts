@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { markDirty } from "../lib/git.js";
-import { appendUnderSection, projectFile, timestampBerlin } from "../lib/vault.js";
+import { appendUnderSection, noteSizeHint, projectFile, timestampBerlin } from "../lib/vault.js";
 
 export const addToProjectTool = {
   name: "add_to_project",
   description:
-    "Append text to a section in a project file under 02 Projekte/. Use for project-related notes (architecture decisions, build steps, bugs, ideas about a specific project). REQUIRED WORKFLOW: call find_similar first with the new text — if it returns a hit in 02 Projekte/ with score ≥ 0.15, point THIS tool at that existing project and pick a fitting section instead of creating a new project file. Only create a new project file when the topic is genuinely new.",
+    "Append text to a section in a project file under 02 Projekte/. Use for project-related notes (architecture decisions, build steps, bugs, ideas about a specific project). REQUIRED WORKFLOW: call find_similar first with the new text — if it returns a hit in 02 Projekte/ with score ≥ 0.15, point THIS tool at that existing project and pick a fitting section instead of creating a new project file. Only create a new project file when the topic is genuinely new. The response includes a size hint — if the target file is large, consider splitting before appending more.",
   inputSchema: {
     project: z
       .string()
@@ -27,17 +27,16 @@ export const addToProjectTool = {
     text: string;
   }) => {
     const stamp = timestampBerlin();
-    await appendUnderSection(
-      projectFile(project),
-      section,
-      `- _(${stamp})_ ${text}\n`,
-      { title: project, tags: ["projekt"] },
-    );
+    const target = projectFile(project);
+    await appendUnderSection(target, section, `- _(${stamp})_ ${text}\n`, {
+      title: project,
+      tags: ["projekt"],
+    });
     markDirty(`add_to_project ${project} / ${section}`);
-    return {
-      content: [
-        { type: "text" as const, text: `Zu '${project}' → ## ${section} hinzugefügt.` },
-      ],
-    };
+    const hint = await noteSizeHint(target);
+    const body =
+      `Zu '${project}' → ## ${section} hinzugefügt.` +
+      (hint.message ? `\n\n${hint.message}` : "");
+    return { content: [{ type: "text" as const, text: body }] };
   },
 };

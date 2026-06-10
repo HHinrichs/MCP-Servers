@@ -5,7 +5,7 @@ import { appendUnderSection, resourceFile, timestampBerlin } from "../lib/vault.
 export const addToResourceTool = {
   name: "add_to_resource",
   description:
-    "Append a note to a resource topic under 04 Ressourcen/<topic>/. Resources are reference material on specific subjects (e.g. 'FastAPI', 'Nginx').",
+    "Append a note to a resource topic under 04 Ressourcen/<topic>/. Resources are reference material on specific subjects (e.g. 'FastAPI', 'Nginx'). REQUIRED WORKFLOW: call find_similar first — if a 04 Ressourcen/ note already covers the topic (score ≥ 0.15), extend that one. Only create a new resource folder for genuinely new topics.",
   inputSchema: {
     topic: z.string().min(1).describe("Resource topic name (matches folder in 04 Ressourcen/)."),
     text: z.string().min(1).describe("Markdown content to append under '## Notizen'."),

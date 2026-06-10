@@ -5,7 +5,7 @@ import { appendUnderSection, projectFile, timestampBerlin } from "../lib/vault.j
 export const addToProjectTool = {
   name: "add_to_project",
   description:
-    "Append text to a section in a project file under 02 Projekte/. If the section doesn't exist, it is created at the end of the file. Use for project-related notes (architecture decisions, build steps, bugs, ideas about a specific project).",
+    "Append text to a section in a project file under 02 Projekte/. Use for project-related notes (architecture decisions, build steps, bugs, ideas about a specific project). REQUIRED WORKFLOW: call find_similar first with the new text — if it returns a hit in 02 Projekte/ with score ≥ 0.15, point THIS tool at that existing project and pick a fitting section instead of creating a new project file. Only create a new project file when the topic is genuinely new.",
   inputSchema: {
     project: z
       .string()

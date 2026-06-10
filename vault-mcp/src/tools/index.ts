@@ -5,6 +5,7 @@ import { addToAreaTool } from "./add_to_area.js";
 import { addToResourceTool } from "./add_to_resource.js";
 import { updateDailyTool } from "./update_daily.js";
 import { searchNotesTool } from "./search_notes.js";
+import { findSimilarTool } from "./find_similar.js";
 import { readNoteTool } from "./read_note.js";
 import { listInboxTool } from "./list_inbox.js";
 import { moveNoteTool } from "./move_note.js";
@@ -16,6 +17,7 @@ const ALL_TOOLS = [
   addToResourceTool,
   updateDailyTool,
   searchNotesTool,
+  findSimilarTool,
   readNoteTool,
   listInboxTool,
   moveNoteTool,

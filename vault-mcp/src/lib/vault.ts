@@ -98,10 +98,18 @@ export async function writeMarkdown(
   await fs.writeFile(absPath, serialized, "utf8");
 }
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * Append a block to a Markdown file under a specific `## Section` header. If the
  * section is missing, it's appended to the end of the body. If `section` is null,
  * the block is appended to the very end.
+ *
+ * Section matching uses a line-anchored regex so a literal "## Notizen" appearing
+ * inside a table cell or code block doesn't accidentally win. Only a real header
+ * line (start of line, hash-marks, exact text) matches.
  */
 export async function appendUnderSection(
   absPath: string,
@@ -116,16 +124,24 @@ export async function appendUnderSection(
   if (section === null) {
     newBody = body.replace(/\s+$/, "") + "\n\n" + trimmedBlock;
   } else {
-    const sectionHeader = `## ${section}`;
-    const idx = body.indexOf(sectionHeader);
-    if (idx === -1) {
+    const headerRegex = new RegExp(`^## ${escapeRegex(section)}\\s*$`, "m");
+    const headerMatch = body.match(headerRegex);
+
+    if (!headerMatch || headerMatch.index === undefined) {
+      // Section doesn't exist yet — append a new one at the end.
       newBody =
-        body.replace(/\s+$/, "") + "\n\n" + sectionHeader + "\n\n" + trimmedBlock;
+        body.replace(/\s+$/, "") + "\n\n## " + section + "\n\n" + trimmedBlock;
     } else {
-      // Find the next heading (any level) after the matched section, insert before it.
-      const after = idx + sectionHeader.length;
-      const restMatch = body.slice(after).match(/\n(#{1,6} )/);
-      const insertAt = restMatch ? after + (restMatch.index ?? 0) : body.length;
+      const sectionStart = headerMatch.index;
+      const sectionHeaderEnd = sectionStart + headerMatch[0].length;
+      // Find the next heading line (any level) AFTER the matched section header
+      // — anchored to a line start so we don't match "## Foo" inside a table.
+      const nextHeaderRegex = /^#{1,6} /m;
+      const remainder = body.slice(sectionHeaderEnd);
+      const nextMatch = remainder.match(nextHeaderRegex);
+      const insertAt = nextMatch && nextMatch.index !== undefined
+        ? sectionHeaderEnd + nextMatch.index
+        : body.length;
       newBody =
         body.slice(0, insertAt).replace(/\s+$/, "") +
         "\n\n" +

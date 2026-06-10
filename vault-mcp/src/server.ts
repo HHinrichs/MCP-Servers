@@ -59,10 +59,31 @@ add_to_* responses carry a hint:
   Resources are already folders → drop a sibling <Area>/<Subtopic>.md.
   Hannes finishes the split manually for now (no edit/delete tool yet).
 
+## CROSS-LINKING (the brain in second brain)
+
+The vault is a knowledge graph, not a pile of files. Every note you write
+or extend MUST actively connect to its neighbours via [[Wikilinks]]:
+
+1. While composing the text, replace every prominent reference to an existing
+   project / area / resource with a [[Wikilink]]. Examples: "die Konfiguration
+   auf [[Hostinger]] läuft jetzt", "fixt das Problem aus
+   [[Homegrow Controller]]", "siehe [[Coolify]] für den Reverse Proxy".
+2. find_similar already shows you nearby notes. Treat its top hits as
+   linking candidates, not only as dedup targets: even if you write into a
+   fresh section, link the related notes inline so they show up in
+   Obsidian's backlinks panel.
+3. When you create a new note (genuinely new topic): add at least one
+   [[Wikilink]] back to the parent context, e.g. a new resource under
+   "Nginx" should mention [[Hostinger]] where it's used. No orphan notes.
+4. Don't sprinkle randomly — link only on the first prominent mention per
+   section, and only to notes that actually exist or that you're about to
+   create. A broken [[Wikilink]] is fine if you're foreshadowing a note
+   that should be created soon, but flag it in your response so Hannes
+   knows.
+
 ## CONVENTIONS
 
-- Markdown. Use [[Wikilinks]] for cross-references.
-- One idea per note when possible (exception: Daily Notes).
+- Markdown. One idea per note when possible (exception: Daily Notes).
 - Filenames use spaces and proper case: "Beschreibender Name.md".
 - Tools auto-write YAML frontmatter (tags, erstellt, updated) — don't manage it yourself.
 - Never delete or overwrite. Append-only. move_note is allowed for triage
@@ -70,7 +91,7 @@ add_to_* responses carry a hint:
 - Don't move things to 06 Archiv/ unless Hannes explicitly asks.
 - Pushing is automatic (30s debounce). No save/sync tool needed.
 
-Help Hannes keep his second brain crisp.
+Help Hannes keep his second brain crisp AND connected.
 `.trim();
 
 function buildMcp(): McpServer {

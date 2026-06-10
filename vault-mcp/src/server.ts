@@ -73,25 +73,27 @@ add_to_* responses carry a hint:
 
 ## CROSS-LINKING (the brain in second brain)
 
-The vault is a knowledge graph, not a pile of files. Every note you write
-or extend MUST actively connect to its neighbours via [[Wikilinks]]:
+The vault is a knowledge graph. Every write is a chance to strengthen
+connections — but only when the connection is real. A Wikilink is earned,
+not enforced. A sparse honest graph beats a dense fake one.
 
-1. While composing the text, replace every prominent reference to an existing
-   project / area / resource with a [[Wikilink]]. Examples: "die Konfiguration
-   auf [[Hostinger]] läuft jetzt", "fixt das Problem aus
-   [[Homegrow Controller]]", "siehe [[Coolify]] für den Reverse Proxy".
-2. find_similar already shows you nearby notes. Treat its top hits as
-   linking candidates, not only as dedup targets: even if you write into a
-   fresh section, link the related notes inline so they show up in
-   Obsidian's backlinks panel.
-3. When you create a new note (genuinely new topic): add at least one
-   [[Wikilink]] back to the parent context, e.g. a new resource under
-   "Nginx" should mention [[Hostinger]] where it's used. No orphan notes.
-4. Don't sprinkle randomly — link only on the first prominent mention per
-   section, and only to notes that actually exist or that you're about to
-   create. A broken [[Wikilink]] is fine if you're foreshadowing a note
-   that should be created soon, but flag it in your response so Hannes
-   knows.
+1. While composing, scan for prominent references to existing notes. If a
+   project / area / resource is genuinely relevant to what you're writing,
+   replace the mention with a [[Wikilink]]. Examples: "die Konfiguration
+   auf [[Hostinger]] läuft jetzt", "siehe [[Coolify]] für den Reverse Proxy".
+2. find_similar shows you neighbouring notes. Use them as linking
+   candidates IF the relation is meaningful — not just because they share
+   a keyword. Coincidental overlap is not a connection.
+3. When you create a new note, prefer one [[Wikilink]] back to a parent
+   context IF a true parent exists (e.g. a new "Nginx" resource that's used
+   on [[Hostinger]]). But if the topic is genuinely isolated — a one-off
+   insight, an unrelated hobby, a standalone reference — leave it unlinked
+   and say so in your reply: "neue Notiz ohne natürlichen Kontext im Vault,
+   steht alleine".
+4. Link only on the first prominent mention per section. No sprinkling.
+   Broken [[Wikilink]]s are OK as foreshadowing if you flag them, but a
+   wrong or forced link is worse than no link — it pollutes future search
+   and the backlinks panel.
 
 ## CONVENTIONS
 

@@ -21,21 +21,24 @@ async function main(): Promise<void> {
   });
 
   // 3. Schedule background jobs.
+  // 03:00 Berlin — runs 1h after Hannes' mental day ends (he works up to ~02:00).
+  // Scope: last 24h of bot commits, written into <yesterday>.md.
   cron.schedule(
-    "0 22 * * *",
+    "0 3 * * *",
     () => {
       void runDailyRecap().catch((e) => console.error("[daily_recap] failed:", e));
     },
     { timezone: TZ },
   );
+  // 04:00 Berlin — staggered after the recap so they don't trip over each other.
   cron.schedule(
-    "0 3 * * *",
+    "0 4 * * *",
     () => {
       void runInboxCuration().catch((e) => console.error("[inbox_curation] failed:", e));
     },
     { timezone: TZ },
   );
-  console.log("[boot] cron jobs scheduled");
+  console.log("[boot] cron jobs scheduled (daily_recap 03:00, inbox_curation 04:00)");
 }
 
 main().catch((e) => {

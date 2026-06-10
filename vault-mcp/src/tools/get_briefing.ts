@@ -3,13 +3,16 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
 import { VAULT_DIRS, vaultPath } from "../lib/vault.js";
+import { getGit } from "../lib/git.js";
 
 const PROJECT_SNIPPET_CHARS = 600;
+const DEFAULT_COMMIT_COUNT = 10;
+const MAX_COMMIT_COUNT = 30;
 
 export const getBriefingTool = {
   name: "get_briefing",
   description:
-    "Get a short briefing on the current state of the vault: the last few daily notes plus all active projects (status: aktiv). Use this whenever Hannes asks 'Wo war ich?', 'Was ist aktuell?', 'Stand der Dinge?' or any continuity / catch-up question — call this BEFORE answering from memory.",
+    "Get a short briefing on the current state of the vault: the last few daily notes, all active projects, AND the last N git commits (i.e. the actual recent changes). Use this whenever Hannes asks 'Wo war ich?', 'Was ist aktuell?', 'Stand der Dinge?', 'Was habe ich zuletzt bearbeitet?', or any continuity / catch-up question — call this BEFORE answering from memory.",
   inputSchema: {
     days_back: z
       .number()
@@ -18,8 +21,21 @@ export const getBriefingTool = {
       .max(7)
       .optional()
       .describe("How many recent daily notes to include. Default 3."),
+    commits: z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_COMMIT_COUNT)
+      .optional()
+      .describe(`How many recent git commits to include. Default ${DEFAULT_COMMIT_COUNT}.`),
   },
-  handler: async ({ days_back = 3 }: { days_back?: number }) => {
+  handler: async ({
+    days_back = 3,
+    commits = DEFAULT_COMMIT_COUNT,
+  }: {
+    days_back?: number;
+    commits?: number;
+  }) => {
     // --- Recent daily notes ---
     const dailyDir = vaultPath(VAULT_DIRS.daily);
     let dailyFiles: string[] = [];
@@ -106,6 +122,32 @@ export const getBriefingTool = {
       for (const p of activeProjects) {
         parts.push(`\n### [[${p.name}]] _(status: ${p.status})_\n\n${p.snippet}`);
       }
+    }
+
+    // --- Recent commits (actual vault activity) ---
+    parts.push(`\n## Letzte ${commits} Commits`);
+    try {
+      const log = await getGit().log({ maxCount: commits });
+      if (log.total === 0) {
+        parts.push("\n_Noch keine Commits im Vault._");
+      } else {
+        const fmt = new Intl.DateTimeFormat("de-DE", {
+          timeZone: "Europe/Berlin",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
+        for (const c of log.all) {
+          const subject = c.message.split("\n")[0] ?? "";
+          const when = fmt.format(new Date(c.date));
+          parts.push(`- _${when}_ — ${subject}`);
+        }
+      }
+    } catch (e) {
+      parts.push(`\n_Commit-Log nicht lesbar: ${(e as Error).message}_`);
     }
 
     return { content: [{ type: "text" as const, text: parts.join("\n") }] };

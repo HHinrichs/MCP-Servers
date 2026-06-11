@@ -31,16 +31,37 @@ export function vaultPath(...segments: string[]): string {
 
 export async function ensureRepoCloned(): Promise<void> {
   const fs = await import("node:fs/promises");
+  let present = false;
   try {
     await fs.access(path.join(REPO_PATH!, ".git"));
-    console.log(`[git] repo present at ${REPO_PATH}, fetching latest`);
-    await git.fetch().pull("origin", "main", { "--rebase": "true" });
+    present = true;
   } catch {
+    present = false;
+  }
+
+  if (!present) {
     console.log(`[git] cloning ${REPO_REMOTE} -> ${REPO_PATH}`);
     const parent = path.dirname(REPO_PATH!);
     await fs.mkdir(parent, { recursive: true });
     await simpleGit().clone(REPO_REMOTE!, REPO_PATH!);
+  } else {
+    console.log(`[git] repo present at ${REPO_PATH}, fetching latest`);
+    // A conflicting pull must never crash the boot (restart loop) or leave the
+    // repo in a half-rebase state. Worst case we run on a slightly stale
+    // checkout; the push path retries the rebase on the next write anyway.
+    try {
+      await git.fetch();
+      await git.pull("origin", "main", { "--rebase": "true" });
+    } catch (e) {
+      console.error("[git] boot pull failed — aborting any in-progress rebase and continuing:", e);
+      try {
+        await git.rebase(["--abort"]);
+      } catch {
+        // no rebase in progress
+      }
+    }
   }
+
   await git.addConfig("user.name", AUTHOR_NAME, false, "local");
   await git.addConfig("user.email", AUTHOR_EMAIL, false, "local");
 }
@@ -55,33 +76,50 @@ async function commitAndPush(): Promise<void> {
   debounceTimer = null;
   const msgs = pendingMessages.slice();
   pendingMessages = [];
-  if (msgs.length === 0) return;
-
-  await git.add(".");
-  const status = await git.status();
-  if (status.files.length === 0) {
-    console.log("[git] nothing to commit");
-    return;
-  }
-
-  const summary: string =
-    msgs.length === 1
-      ? (msgs[0] ?? "vault update")
-      : `vault-mcp: ${msgs.length} updates\n\n${msgs.map((m) => `- ${m}`).join("\n")}`;
 
   try {
-    await git.commit(summary);
-    // Rebase-pull guards against concurrent updates from the user's local Obsidian.
+    await git.add(".");
+    const status = await git.status();
+
+    if (status.files.length > 0) {
+      const summary: string =
+        msgs.length === 0
+          ? "vault update"
+          : msgs.length === 1
+            ? (msgs[0] ?? "vault update")
+            : `vault-mcp: ${msgs.length} updates\n\n${msgs.map((m) => `- ${m}`).join("\n")}`;
+      await git.commit(summary);
+      console.log(`[git] committed: ${summary.split("\n")[0] ?? summary}`);
+    } else if (status.ahead === 0) {
+      // Nothing staged and nothing waiting to go out.
+      if (msgs.length > 0) console.log("[git] nothing to commit");
+      return;
+    } else {
+      // Nothing staged, but an earlier commit never made it out (push failed
+      // after a successful commit). Fall through and push it now.
+      console.log(`[git] ${status.ahead} unpushed commit(s) pending — pushing`);
+    }
+
+    // Rebase onto remote before pushing (Hannes pushes to the same repo).
+    // A failed rebase is aborted immediately so the repo never sits in a
+    // half-rebase state; the push below then surfaces the real divergence.
     try {
       await git.pull("origin", "main", { "--rebase": "true" });
     } catch (e) {
-      console.warn("[git] rebase pull failed (continuing to push):", e);
+      console.warn("[git] rebase pull failed — aborting rebase:", e);
+      try {
+        await git.rebase(["--abort"]);
+      } catch {
+        // no rebase in progress
+      }
     }
+
     await git.push("origin", "main");
-    console.log(`[git] pushed: ${summary.split("\n")[0] ?? summary}`);
+    console.log("[git] pushed");
   } catch (e) {
-    console.error("[git] commit/push failed:", e);
-    // Re-queue messages so the next dirty trigger retries.
+    console.error("[git] commit/push failed, re-queueing for retry:", e);
+    // Re-queue messages so the next flush retries; an already-created commit
+    // is picked up via the status.ahead branch above.
     pendingMessages.unshift(...msgs);
     scheduleFlush();
   }

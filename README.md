@@ -192,6 +192,7 @@ Ein funktionierendes Setup ruft `get_briefing` automatisch auf und antwortet mit
 | Symptom | Ursache | Fix |
 |---|---|---|
 | 401 Unauthorized | Token falsch oder mit Whitespace eingefügt | Token-Datei neu lesen, kein Trim-Whitespace, keine Spitzklammern `<...>`, keine Anführungszeichen |
+| 401 nach Token-Rotation | Laufende Client-Sessions lesen die MCP-Config nur beim Start und halten den alten Token | Alle laufenden Clients (Claude Code Session, Claude Desktop, VS Code) einmal neu starten |
 | 403 Forbidden | Origin-Header ist nicht in der Whitelist (`MCP_ALLOWED_ORIGINS`) | Betrifft nur browser-basierte Clients (z.B. claude.ai Web). Der Hostinger-Admin muss den Origin in der ENV-Variable des `vault-mcp`-Containers ergänzen. |
 | Connection timeout | URL-Tippfehler oder DNS noch nicht propagiert | `curl https://mcp.verdara-homegrow.de/healthz` muss `ok` zurückgeben |
 | Tools tauchen im Client nicht auf | Config wurde nicht erkannt | Client komplett neu starten, Config-Datei auf gültiges JSON prüfen, in Logs schauen |

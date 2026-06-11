@@ -62,12 +62,34 @@ function parseEntries(content: string): InboxEntry[] {
   return entries;
 }
 
+function berlinOffsetMinutes(at: Date): number {
+  const tz =
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Berlin",
+      timeZoneName: "shortOffset",
+    })
+      .formatToParts(at)
+      .find((p) => p.type === "timeZoneName")?.value ?? "GMT+1";
+  const m = tz.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+  if (!m) return 60;
+  const sign = m[1] === "-" ? -1 : 1;
+  return sign * (Number(m[2] ?? "1") * 60 + Number(m[3] ?? "0"));
+}
+
 function parseTimestamp(header: string): Date | null {
   // Expected format: 'YYYY-MM-DD HH:MM' (from timestampBerlin)
   const m = header.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
   if (!m) return null;
-  // Treat as Berlin local time; Date constructor needs ISO.
-  return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00+01:00`);
+  // Interpret as Europe/Berlin local time. Build a UTC guess, then shift by
+  // the zone offset valid at that instant — correct in CET and CEST.
+  const guess = Date.UTC(
+    Number(m[1]),
+    Number(m[2]) - 1,
+    Number(m[3]),
+    Number(m[4]),
+    Number(m[5]),
+  );
+  return new Date(guess - berlinOffsetMinutes(new Date(guess)) * 60_000);
 }
 
 function suggestTarget(text: string): string | null {

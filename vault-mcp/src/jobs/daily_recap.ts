@@ -1,5 +1,5 @@
 import { flushNow, getGit, markDirty } from "../lib/git.js";
-import { appendUnderSection, dailyFile, todayBerlin } from "../lib/vault.js";
+import { appendUnderSection, dailyFile, timestampBerlin } from "../lib/vault.js";
 
 /** YYYY-MM-DD for "yesterday" in Europe/Berlin. */
 function yesterdayBerlin(): string {
@@ -51,7 +51,7 @@ export async function runDailyRecap(): Promise<void> {
     .map(([cat, n]) => `- **${cat}**: ${n} Eintrag/Einträge`);
 
   const block =
-    `_Auto-generiert am ${todayBerlin()} 03:00 für den mentalen Tag ${yesterday} (03:00 bis 03:00)._\n\n` +
+    `_Auto-generiert am ${timestampBerlin()} für den mentalen Tag ${yesterday} (Zeitfenster: die letzten 24 Stunden vor dem Lauf)._\n\n` +
     `Im letzten Tag wurden ${log.total} Commit(s) vom Vault-MCP geschrieben:\n\n` +
     lines.join("\n") +
     `\n`;

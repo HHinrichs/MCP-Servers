@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { markDirty } from "../lib/git.js";
+import { dedupWarning } from "../lib/dedup.js";
 import {
   KONTEXT_FILES,
   appendUnderSection,
@@ -11,7 +12,7 @@ import {
 export const addToContextTool = {
   name: "add_to_context",
   description:
-    "Append text to a section in one of the four product-strategy files under 00 Kontext/ (Über das Produkt | Zielgruppe | Pitch | Vision). Use for sales/positioning insights, ICP details, pitch fragments, product vision. Same find_similar / size-hint discipline as add_to_project / add_to_area / add_to_resource: call find_similar first; if a meaningfully related entry already exists in 00 Kontext/, extend it instead of creating a duplicate section.",
+    "Append text to a section in one of the four product-strategy files under 00 Kontext/ (Über das Produkt | Zielgruppe | Pitch | Vision). Use for sales/positioning insights, ICP details, pitch fragments, product vision. Same find_similar / size-hint discipline as add_to_project / add_to_area / add_to_resource: call find_similar first; if a meaningfully related entry already exists in 00 Kontext/ (labelled 'verwandt' or 'sehr ähnlich'), extend it instead of creating a duplicate section. The response carries a dedup warning if a very similar entry already exists elsewhere.",
   inputSchema: {
     file: z
       .enum(KONTEXT_FILES)
@@ -41,9 +42,11 @@ export const addToContextTool = {
     });
     markDirty(`add_to_context ${file} / ${section}`);
     const hint = await noteSizeHint(target);
+    const dedup = await dedupWarning(text, target);
     const body =
       `Zu '00 Kontext/${file}' → ## ${section} hinzugefügt.` +
-      (hint.message ? `\n\n${hint.message}` : "");
+      (hint.message ? `\n\n${hint.message}` : "") +
+      dedup;
     return { content: [{ type: "text" as const, text: body }] };
   },
 };

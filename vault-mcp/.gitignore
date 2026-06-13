@@ -1,0 +1,7 @@
+node_modules
+dist
+.cache
+.model-cache
+*.log
+.env
+.env.*

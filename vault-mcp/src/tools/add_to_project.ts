@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { markDirty } from "../lib/git.js";
+import { dedupWarning } from "../lib/dedup.js";
 import { appendUnderSection, noteSizeHint, projectFile, timestampBerlin } from "../lib/vault.js";
 
 export const addToProjectTool = {
   name: "add_to_project",
   description:
-    "Append text to a section in a project file under 02 Projekte/. Use for project-related notes (architecture decisions, build steps, bugs, ideas about a specific project). REQUIRED WORKFLOW: call find_similar first with the new text — if it returns a hit in 02 Projekte/ with score ≥ 0.15, point THIS tool at that existing project and pick a fitting section instead of creating a new project file. Only create a new project file when the topic is genuinely new. The response includes a size hint — if the target file is large, consider splitting before appending more.",
+    "Append text to a section in a project file under 02 Projekte/. Use for project-related notes (architecture decisions, build steps, bugs, ideas about a specific project). REQUIRED WORKFLOW: call find_similar first with the new text — if it labels a hit in 02 Projekte/ as 'verwandt' or 'sehr ähnlich', point THIS tool at that existing project and pick a fitting section instead of creating a new project file. Only create a new project file when the topic is genuinely new. The response includes a size hint and, if a very similar entry already exists elsewhere, a dedup warning.",
   inputSchema: {
     project: z
       .string()
@@ -34,9 +35,11 @@ export const addToProjectTool = {
     });
     markDirty(`add_to_project ${project} / ${section}`);
     const hint = await noteSizeHint(target);
+    const dedup = await dedupWarning(text, target);
     const body =
       `Zu '${project}' → ## ${section} hinzugefügt.` +
-      (hint.message ? `\n\n${hint.message}` : "");
+      (hint.message ? `\n\n${hint.message}` : "") +
+      dedup;
     return { content: [{ type: "text" as const, text: body }] };
   },
 };

@@ -16,6 +16,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@modelcontextprotocol/sdk": "^1.18.0",
     "express": "^4.21.2",
     "gray-matter": "^4.0.3",

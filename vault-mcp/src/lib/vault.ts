@@ -100,8 +100,18 @@ export async function writeMarkdown(
   await fs.writeFile(absPath, serialized, "utf8");
 }
 
-function escapeRegex(s: string): string {
+export function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Root-level rule files: AGENTS.md is loaded as server instructions on every
+// request, CLAUDE.md is the Claude-Code pointer to it. Moving or splitting
+// either would silently strip all clients of their rules.
+const PROTECTED_ROOT_FILES = new Set(["AGENTS.md", "CLAUDE.md"]);
+
+export function isProtectedRootFile(rel: string): boolean {
+  const norm = rel.replace(/\\/g, "/").replace(/^(\.\/)+/, "");
+  return PROTECTED_ROOT_FILES.has(norm);
 }
 
 /**

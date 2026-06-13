@@ -2,7 +2,7 @@ import { z } from "zod";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { markDirty } from "../lib/git.js";
-import { resolveVaultPath } from "../lib/vault.js";
+import { isProtectedRootFile, resolveVaultPath } from "../lib/vault.js";
 
 export const moveNoteTool = {
   name: "move_note",
@@ -13,6 +13,17 @@ export const moveNoteTool = {
     to: z.string().min(1).describe("Destination path, relative to vault root."),
   },
   handler: async ({ from, to }: { from: string; to: string }) => {
+    if (isProtectedRootFile(from) || isProtectedRootFile(to)) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: "AGENTS.md / CLAUDE.md im Vault-Root sind die Regelquelle des Servers und dürfen nicht verschoben werden.",
+          },
+        ],
+        isError: true,
+      };
+    }
     const src = resolveVaultPath(from);
     const dst = resolveVaultPath(to);
     try {

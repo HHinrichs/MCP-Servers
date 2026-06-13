@@ -10,6 +10,7 @@ import { findSimilarTool } from "./find_similar.js";
 import { readNoteTool } from "./read_note.js";
 import { listInboxTool } from "./list_inbox.js";
 import { moveNoteTool } from "./move_note.js";
+import { splitNoteTool } from "./split_note.js";
 import { getBriefingTool } from "./get_briefing.js";
 
 const ALL_TOOLS = [
@@ -24,6 +25,7 @@ const ALL_TOOLS = [
   readNoteTool,
   listInboxTool,
   moveNoteTool,
+  splitNoteTool,
   getBriefingTool,
 ];
 

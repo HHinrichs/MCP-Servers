@@ -7,7 +7,7 @@ import { isProtectedRootFile, resolveVaultPath } from "../lib/vault.js";
 export const moveNoteTool = {
   name: "move_note",
   description:
-    "Move or rename a note within the vault. Both paths are relative to the vault root. Use to promote an inbox entry into a project/area, or to rename.",
+    "Move or rename a note within the vault. Both paths are relative to the vault root. Typical uses: archive a triaged inbox note to '06 Archiv/Inbox/' (after merging its content via add_to_*), or rename a note.",
   inputSchema: {
     from: z.string().min(1).describe("Source path, relative to vault root."),
     to: z.string().min(1).describe("Destination path, relative to vault root."),

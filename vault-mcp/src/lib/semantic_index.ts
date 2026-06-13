@@ -176,7 +176,7 @@ export function createSemanticIndex(deps: SemanticIndexDeps): SemanticIndex {
     return persistChain;
   }
 
-  async function reconcile(): Promise<void> {
+  async function doReconcile(): Promise<void> {
     const { splitIntoChunks } = await import("./sections.js");
     const files = await walkMd(vaultRoot);
     const present = new Set(files);
@@ -238,6 +238,19 @@ export function createSemanticIndex(deps: SemanticIndexDeps): SemanticIndex {
     // Persist only when content actually changed (keeps per-query reconciles
     // free), and await the durable write so a fresh instance can load it.
     if (changed) await persist();
+  }
+
+  // Serialize reconciles via a single-flight chain (mirrors persistChain). The
+  // index is a process-global singleton hit by concurrent requests; without
+  // this, two reconciles could interleave across the embed await and a racing
+  // GC could drop a vector or `entries = next` could clobber a fresh index.
+  // A caller arriving after a write still gets a run that STARTS after the
+  // previous one finished, so dedup/find_similar see freshly written files.
+  let reconcileTail: Promise<void> = Promise.resolve();
+  function reconcile(): Promise<void> {
+    const run = reconcileTail.then(doReconcile);
+    reconcileTail = run.catch(() => {});
+    return run;
   }
 
   function search(queryVec: Float32Array, opts: SearchOpts): SearchHit[] {

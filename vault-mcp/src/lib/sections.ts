@@ -15,11 +15,14 @@ export interface SectionChunk {
 }
 
 /**
- * Char budget per chunk. multilingual-e5-small truncates at 512 tokens; at a
- * conservative ~3.5 chars/token for mixed DE/EN that is ~1800 chars, so 1500
- * leaves headroom. Oversized '## ' sections are sub-chunked below this.
+ * Char budget per chunk. multilingual-e5-small truncates at 512 tokens. German
+ * tokenizes denser than English (compound words → more subword tokens), so a
+ * char budget must stay well under the naive ~1800-char estimate to avoid
+ * silent truncation — which hurts dedup precision most. 1100 chars keeps even
+ * dense German sections inside the 512-token window. Oversized '## ' sections
+ * are sub-chunked below this.
  */
-export const SECTION_MAX_CHARS = 1500;
+export const SECTION_MAX_CHARS = 1100;
 
 function sha(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");

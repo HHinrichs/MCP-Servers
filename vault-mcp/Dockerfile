@@ -1,6 +1,12 @@
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 
+# libgomp1 is needed already in the builder: the build-time model prefetch runs
+# a real onnxruntime-node inference, which dlopens libgomp.so.1. Without it the
+# prefetch RUN below fails and no image is produced.
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json* ./
 RUN npm ci
 

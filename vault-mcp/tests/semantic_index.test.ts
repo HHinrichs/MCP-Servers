@@ -141,6 +141,31 @@ describe("semantic index", () => {
     expect(hits.length).toBeGreaterThan(0);
   });
 
+  test("concurrent reconcile() calls are serialized (no overlapping embeds)", async () => {
+    const { root, indexPath } = await tmpVault();
+    await write(root, "a.md", NGINX);
+    await write(root, "b.md", HYDRO);
+    const base = createFakeEmbedder();
+    let active = 0;
+    let violated = false;
+    const slow: Embedder = {
+      dim: base.dim,
+      id: base.id,
+      embedPassages: async (texts) => {
+        if (active > 0) violated = true; // another embed already in flight → reconciles overlapped
+        active++;
+        await new Promise((r) => setTimeout(r, 20));
+        active--;
+        return base.embedPassages(texts);
+      },
+      embedQuery: (t) => base.embedQuery(t),
+    };
+    const idx = createSemanticIndex({ embedder: slow, vaultRoot: root, indexPath });
+    await Promise.all([idx.reconcile(), idx.reconcile(), idx.reconcile()]);
+    expect(violated).toBe(false);
+    expect(idx.size()).toBe(2); // both sections present, none dropped by a racing GC
+  });
+
   test("label() maps scores to bands using SIM thresholds", () => {
     expect(label(SIM.high + 0.01)).toBe("sehr ähnlich");
     expect(label((SIM.related + SIM.high) / 2)).toBe("verwandt");

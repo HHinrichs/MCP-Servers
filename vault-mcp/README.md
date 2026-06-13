@@ -10,7 +10,7 @@ The behavioral rules served to MCP clients live **in the vault itself**: `AGENTS
 
 | Name | Purpose |
 |---|---|
-| `quick_dump` | Append to `01 Inbox/Brain Dump.md` with a timestamp header |
+| `quick_dump` | Create an atomic inbox note `01 Inbox/YYYY-MM-DD HHMM <Titel>.md` (one file per thought) |
 | `add_to_project` | Append to a section in `02 Projekte/<project>.md` |
 | `add_to_area` | Append to a section in `03 Bereiche/<area>/<area>.md` |
 | `add_to_resource` | Append to `04 Ressourcen/<topic>/<topic>.md` under `## Notizen` |
@@ -19,7 +19,7 @@ The behavioral rules served to MCP clients live **in the vault itself**: `AGENTS
 | `search_notes` | Full-text search across all `.md` files, optionally filtered by folder |
 | `find_similar` | TF-IDF similarity ranking against all notes (anti-sprawl pre-check) |
 | `read_note` | Read the full content of a note |
-| `list_inbox` | List inbox entries with timestamps |
+| `list_inbox` | List atomic inbox notes, newest first (flags legacy Brain Dump entries) |
 | `move_note` | Move/rename a note (root `AGENTS.md`/`CLAUDE.md` are protected) |
 | `split_note` | Extract a `## section` (incl. `###` subsections) into a new note, leaving a `[[Wikilink]]` stub |
 | `get_briefing` | Recent daily notes + active projects + recent commits |
@@ -27,7 +27,7 @@ The behavioral rules served to MCP clients live **in the vault itself**: `AGENTS
 ## Background jobs
 
 - `daily_recap` — 03:00 Europe/Berlin daily, appends a commit summary to yesterday's Daily Note.
-- `inbox_curation` — 04:00 daily, writes classification suggestions to `01 Inbox/_kuratierung.md`.
+- `inbox_curation` — 04:00 daily, writes per-note triage suggestions (target + move_note flow) to `01 Inbox/_kuratierung.md`.
 
 ## Configuration (environment variables)
 

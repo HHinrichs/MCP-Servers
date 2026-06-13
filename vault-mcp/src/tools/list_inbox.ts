@@ -1,10 +1,18 @@
 import { z } from "zod";
-import { readIfExists, inboxFile } from "../lib/vault.js";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import matter from "gray-matter";
+import { VAULT_DIRS, inboxFile, readIfExists, vaultPath } from "../lib/vault.js";
+
+/** Files in 01 Inbox/ that are not triagable thoughts. */
+function isListable(name: string): boolean {
+  return name.endsWith(".md") && !name.startsWith("_") && name !== "Brain Dump.md";
+}
 
 export const listInboxTool = {
   name: "list_inbox",
   description:
-    "List inbox entries from 01 Inbox/Brain Dump.md, parsed by '### YYYY-MM-DD HH:MM'-style timestamp headers. Returns the most recent first.",
+    "List atomic inbox notes from 01 Inbox/ (one file per thought, 'YYYY-MM-DD HHMM <Titel>.md'), newest first, each with a content snippet. Triage flow per note: merge the content into its proper home via add_to_*, then move the note file to '06 Archiv/Inbox/' via move_note.",
   inputSchema: {
     limit: z
       .number()
@@ -15,48 +23,39 @@ export const listInboxTool = {
       .describe("Max entries to return. Default 50."),
   },
   handler: async ({ limit = 50 }: { limit?: number }) => {
-    const content = await readIfExists(inboxFile());
-    if (!content) {
-      return {
-        content: [{ type: "text" as const, text: "Inbox ist leer (Datei existiert nicht)." }],
-      };
+    const dir = vaultPath(VAULT_DIRS.inbox);
+    let names: string[] = [];
+    try {
+      names = (await fs.readdir(dir)).filter(isListable).sort().reverse();
+    } catch {
+      // dir missing — empty inbox
     }
-    // Parse entries delimited by '### <header>'.
-    const lines = content.split(/\r?\n/);
-    const entries: Array<{ header: string; body: string }> = [];
-    let currentHeader: string | null = null;
-    let currentBody: string[] = [];
-    const flush = () => {
-      if (currentHeader !== null) {
-        entries.push({ header: currentHeader, body: currentBody.join("\n").trim() });
-      }
-    };
-    for (const line of lines) {
-      const m = line.match(/^###\s+(.+?)\s*$/);
-      if (m) {
-        flush();
-        currentHeader = m[1] ?? null;
-        currentBody = [];
-      } else if (currentHeader !== null) {
-        currentBody.push(line);
-      }
-    }
-    flush();
 
-    // Newest first (assumes headers sort lex-correctly thanks to YYYY-MM-DD HH:MM).
-    entries.reverse();
-    const out = entries.slice(0, limit);
+    const out = names.slice(0, limit);
+    const entries = await Promise.all(
+      out.map(async (name) => {
+        try {
+          const parsed = matter(await fs.readFile(path.join(dir, name), "utf8"));
+          const snippet = parsed.content.replace(/^#.*$/m, "").replace(/\s+/g, " ").trim().slice(0, 200);
+          return `- **${name.replace(/\.md$/, "")}**\n  ${snippet}`;
+        } catch {
+          return `- **${name.replace(/\.md$/, "")}** _(nicht lesbar)_`;
+        }
+      }),
+    );
+
+    // Legacy: alte Eintraege, die noch im Brain Dump stecken.
+    const legacy = await readIfExists(inboxFile());
+    const legacyCount = legacy ? (legacy.match(/^### /gm)?.length ?? 0) : 0;
+    const legacyHint =
+      legacyCount > 0
+        ? `\n\n_Hinweis: ${legacyCount} Alt-Eintrag/Einträge stecken noch in 'Brain Dump.md' (Vor-2026-06-13-Format) — manuell triagieren._`
+        : "";
 
     const summary =
-      out.length === 0
-        ? "Keine `### Timestamp`-Einträge in der Inbox gefunden."
-        : `${entries.length} Eintrag/Einträge insgesamt, zeige Top ${out.length}:\n\n` +
-          out
-            .map(
-              (e, i) =>
-                `${i + 1}. **${e.header}**\n   ${e.body.slice(0, 200).replace(/\s+/g, " ").trim()}`,
-            )
-            .join("\n\n");
+      entries.length === 0
+        ? `Inbox ist leer.${legacyHint}`
+        : `${names.length} Inbox-Notiz(en), zeige ${entries.length} (neueste zuerst):\n\n${entries.join("\n")}${legacyHint}`;
 
     return { content: [{ type: "text" as const, text: summary }] };
   },

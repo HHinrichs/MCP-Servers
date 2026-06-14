@@ -7,6 +7,7 @@ import { addToContextTool } from "./add_to_context.js";
 import { updateDailyTool } from "./update_daily.js";
 import { searchNotesTool } from "./search_notes.js";
 import { findSimilarTool } from "./find_similar.js";
+import { askVaultTool } from "./ask_vault.js";
 import { readNoteTool } from "./read_note.js";
 import { listInboxTool } from "./list_inbox.js";
 import { moveNoteTool } from "./move_note.js";
@@ -22,6 +23,7 @@ const ALL_TOOLS = [
   updateDailyTool,
   searchNotesTool,
   findSimilarTool,
+  askVaultTool,
   readNoteTool,
   listInboxTool,
   moveNoteTool,

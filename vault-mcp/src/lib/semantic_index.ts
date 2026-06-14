@@ -33,6 +33,13 @@ export const SIM = {
   high: 0.90,
   /** Dedup-assist warning floor — only true near-duplicates, not same-topic. */
   dedup: 0.90,
+  /**
+   * ask_vault retrieval floor. Calibrated 2026-06-13 against real questions over
+   * the real vault: unrelated questions top out ~0.805 (slightly below the prose
+   * noise floor), genuinely-relevant answers land ≥0.839. 0.82 sits in that gap —
+   * it suppresses noise while keeping real answers. Paired with a relative top-gap.
+   */
+  answer: 0.82,
 } as const;
 
 export function label(score: number): "sehr ähnlich" | "verwandt" | "eher anders" {
@@ -47,6 +54,8 @@ export interface SearchHit {
   score: number;
   label: ReturnType<typeof label>;
   snippet: string;
+  /** Full section text (heading + body) — used by ask_vault for grounded answers. */
+  text: string;
 }
 
 export interface SearchOpts {
@@ -62,12 +71,13 @@ interface Entry {
   heading: string;
   hash: string;
   snippet: string;
+  text: string;
   vec: Float32Array;
 }
 
 interface SeenFile {
   mtimeMs: number;
-  sections: { heading: string; hash: string; snippet: string }[];
+  sections: { heading: string; hash: string; snippet: string; text: string }[];
 }
 
 export interface SemanticIndexDeps {
@@ -212,7 +222,7 @@ export function createSemanticIndex(deps: SemanticIndexDeps): SemanticIndex {
           continue;
         }
         const chunks = splitIntoChunks(relPath, raw);
-        sections = chunks.map((c) => ({ heading: c.heading, hash: c.hash, snippet: snippetOf(c.text) }));
+        sections = chunks.map((c) => ({ heading: c.heading, hash: c.hash, snippet: snippetOf(c.text), text: c.text }));
         // Embed sections whose vector we don't already have (dedup by hash).
         const missing = chunks.filter((c) => !vectorCache.has(c.hash));
         const uniq = new Map<string, string>();
@@ -227,7 +237,7 @@ export function createSemanticIndex(deps: SemanticIndexDeps): SemanticIndex {
       for (const s of sections) {
         neededHashes.add(s.hash);
         const vec = vectorCache.get(s.hash);
-        if (vec) next.push({ path: relPath, heading: s.heading, hash: s.hash, snippet: s.snippet, vec });
+        if (vec) next.push({ path: relPath, heading: s.heading, hash: s.hash, snippet: s.snippet, text: s.text, vec });
       }
     }
 
@@ -269,7 +279,7 @@ export function createSemanticIndex(deps: SemanticIndexDeps): SemanticIndex {
       if (excludeDirs && excludeDirs.some((d) => e.path.startsWith(d))) continue;
       const score = cosine(queryVec, e.vec);
       if (score < minScore) continue;
-      hits.push({ path: e.path, heading: e.heading, score, label: label(score), snippet: e.snippet });
+      hits.push({ path: e.path, heading: e.heading, score, label: label(score), snippet: e.snippet, text: e.text });
     }
     hits.sort((a, b) => b.score - a.score);
     return hits.slice(0, limit);

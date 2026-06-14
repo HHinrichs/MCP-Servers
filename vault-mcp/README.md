@@ -17,7 +17,8 @@ The behavioral rules served to MCP clients live **in the vault itself**: `AGENTS
 | `add_to_context` | Append to one of the four product files in `00 Kontext/` |
 | `update_daily` | Append to `05 Daily Notes/<today>.md` (creates if missing) |
 | `search_notes` | Full-text search across all `.md` files, optionally filtered by folder |
-| `find_similar` | TF-IDF similarity ranking against all notes (anti-sprawl pre-check) |
+| `find_similar` | Semantic similarity ranking against all notes (anti-sprawl pre-check) |
+| `ask_vault` | Answer a question from the vault — retrieves relevant sections for the client LLM to synthesise a cited answer (local, no API) |
 | `read_note` | Read the full content of a note |
 | `list_inbox` | List atomic inbox notes, newest first (flags legacy Brain Dump entries) |
 | `move_note` | Move/rename a note (root `AGENTS.md`/`CLAUDE.md` are protected) |

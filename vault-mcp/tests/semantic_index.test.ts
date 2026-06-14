@@ -166,6 +166,17 @@ describe("semantic index", () => {
     expect(idx.size()).toBe(2); // both sections present, none dropped by a racing GC
   });
 
+  test("search hits carry the full section text, not just a snippet", async () => {
+    const { root, indexPath } = await tmpVault();
+    const longBody = "EINZIGARTIGERSENTINEL " + "Fülltext Inhalt Absatz ".repeat(30); // > 200 chars
+    await write(root, "a.md", `---\ntags: []\n---\n\n# T\n\n## Lang\n\n${longBody}\n`);
+    const idx = createSemanticIndex({ embedder: createFakeEmbedder(), vaultRoot: root, indexPath });
+    await idx.reconcile();
+    const hits = await idx.searchText("EINZIGARTIGERSENTINEL Fülltext Inhalt", { limit: 1 });
+    expect(hits[0]!.text).toContain("EINZIGARTIGERSENTINEL");
+    expect(hits[0]!.text.length).toBeGreaterThan(200); // full section, not the 200-char snippet
+  });
+
   test("label() maps scores to bands using SIM thresholds", () => {
     expect(label(SIM.high + 0.01)).toBe("sehr ähnlich");
     expect(label((SIM.related + SIM.high) / 2)).toBe("verwandt");

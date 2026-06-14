@@ -1,0 +1,4 @@
+# Alle Textdateien auf LF normalisieren — verhindert CRLF/LF-Rauschen zwischen
+# Windows (Claude Code/Editor) und dem Linux-Build/Container. Binärdateien
+# erkennt git via text=auto selbst und lässt sie unangetastet.
+* text=auto eol=lf

@@ -18,14 +18,21 @@ import { cosine, type Embedder } from "./embeddings.js";
 
 const PERSIST_VERSION = 1;
 
-/** Single tunable source for similarity bands (cosine of L2-normalized e5 vectors). */
+/**
+ * Single tunable source for similarity bands (cosine of L2-normalized e5 vectors).
+ * Calibrated 2026-06-13 against the real vault (266 sections): unrelated queries
+ * top out at ~0.81 (the e5 anisotropy noise floor), genuinely related content
+ * sits 0.85–0.90, and near-duplicates reach 0.90–0.915. So the bands must sit
+ * well above the noise floor — an earlier 0.82 floor sat right on top of it and
+ * labelled almost everything "verwandt".
+ */
 export const SIM = {
-  /** At/above: thematically related — consider extending. */
-  related: 0.82,
-  /** At/above: very likely the same topic. */
-  high: 0.88,
-  /** Dedup-assist warning floor. */
-  dedup: 0.88,
+  /** At/above: thematically related — consider extending. (Noise floor ≈ 0.81.) */
+  related: 0.84,
+  /** At/above: near-duplicate / essentially the same content. */
+  high: 0.90,
+  /** Dedup-assist warning floor — only true near-duplicates, not same-topic. */
+  dedup: 0.90,
 } as const;
 
 export function label(score: number): "sehr ähnlich" | "verwandt" | "eher anders" {

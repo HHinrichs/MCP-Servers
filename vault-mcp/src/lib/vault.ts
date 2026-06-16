@@ -184,6 +184,70 @@ export function projectFile(project: string): string {
   return vaultPath(VAULT_DIRS.projekte, `${safeName(project)}.md`);
 }
 
+async function pathExists(absPath: string): Promise<boolean> {
+  try {
+    await fs.access(absPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve the hub note of a project, tolerating both layouts: a flat
+ * `02 Projekte/<P>.md` and a folder hub `02 Projekte/<P>/<P>.md`. Prefers the
+ * flat hub (the canonical convention); falls back to the folder hub if only
+ * that exists; defaults to the flat path for a brand-new project (so new
+ * projects are created flat, never duplicated). `projekteDir` is injectable
+ * for tests.
+ */
+export async function resolveProjectHubFile(
+  project: string,
+  projekteDir: string = vaultPath(VAULT_DIRS.projekte),
+): Promise<string> {
+  const safe = safeName(project);
+  const flat = path.join(projekteDir, `${safe}.md`);
+  if (await pathExists(flat)) return flat;
+  const folder = path.join(projekteDir, safe, `${safe}.md`);
+  if (await pathExists(folder)) return folder;
+  return flat;
+}
+
+/**
+ * List all project hub notes, tolerating both layouts: flat `02 Projekte/<P>.md`
+ * files and folder hubs `02 Projekte/<P>/<P>.md`. A flat hub wins over a folder
+ * hub of the same name; sub-notes inside a project folder (anything but the
+ * same-named hub) are ignored. Used by get_briefing so folder-based projects
+ * stay visible. `projekteDir` is injectable for tests.
+ */
+export async function listProjectHubs(
+  projekteDir: string = vaultPath(VAULT_DIRS.projekte),
+): Promise<{ name: string; file: string }[]> {
+  let entries;
+  try {
+    entries = await fs.readdir(projekteDir, { withFileTypes: true });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw e;
+  }
+  const hubs = new Map<string, string>(); // project name -> hub file path
+  // Flat hubs first — they are canonical and win on name clashes.
+  for (const e of entries) {
+    if (e.isFile() && e.name.endsWith(".md")) {
+      hubs.set(e.name.replace(/\.md$/, ""), path.join(projekteDir, e.name));
+    }
+  }
+  // Folder hubs (<dir>/<dir>.md) only when no flat hub of that name exists.
+  for (const e of entries) {
+    if (!e.isDirectory() || hubs.has(e.name)) continue;
+    const folderHub = path.join(projekteDir, e.name, `${e.name}.md`);
+    if (await pathExists(folderHub)) hubs.set(e.name, folderHub);
+  }
+  return [...hubs]
+    .map(([name, file]) => ({ name, file }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function areaFile(area: string): string {
   const safe = safeName(area);
   return vaultPath(VAULT_DIRS.bereiche, safe, `${safe}.md`);

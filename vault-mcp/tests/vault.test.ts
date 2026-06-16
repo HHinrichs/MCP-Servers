@@ -5,7 +5,9 @@ import path from "node:path";
 import matter from "gray-matter";
 import {
   appendUnderSection,
+  listProjectHubs,
   noteSizeHint,
+  resolveProjectHubFile,
   resolveVaultPath,
   safeName,
   vaultPath,
@@ -128,5 +130,101 @@ describe("safeName", () => {
 
   test("trims surrounding whitespace", () => {
     expect(safeName("  Homegrow Controller  ")).toBe("Homegrow Controller");
+  });
+});
+
+/** Fresh temp "02 Projekte"-style dir per test. */
+async function tmpProjekteDir(): Promise<string> {
+  return fs.mkdtemp(path.join(os.tmpdir(), "vault-projekte-"));
+}
+
+describe("resolveProjectHubFile", () => {
+  test("returns the flat hub path when '<P>.md' exists", async () => {
+    const dir = await tmpProjekteDir();
+    await fs.writeFile(path.join(dir, "Homegrow Controller.md"), "x", "utf8");
+    const hub = await resolveProjectHubFile("Homegrow Controller", dir);
+    expect(hub).toBe(path.join(dir, "Homegrow Controller.md"));
+  });
+
+  test("falls back to the folder hub '<P>/<P>.md' when no flat hub exists", async () => {
+    const dir = await tmpProjekteDir();
+    await fs.mkdir(path.join(dir, "Vault-MCP-Server"), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, "Vault-MCP-Server", "Vault-MCP-Server.md"),
+      "x",
+      "utf8",
+    );
+    const hub = await resolveProjectHubFile("Vault-MCP-Server", dir);
+    expect(hub).toBe(path.join(dir, "Vault-MCP-Server", "Vault-MCP-Server.md"));
+  });
+
+  test("prefers the flat hub when both flat and folder hubs exist", async () => {
+    const dir = await tmpProjekteDir();
+    await fs.writeFile(path.join(dir, "P.md"), "flat", "utf8");
+    await fs.mkdir(path.join(dir, "P"), { recursive: true });
+    await fs.writeFile(path.join(dir, "P", "P.md"), "folder", "utf8");
+    const hub = await resolveProjectHubFile("P", dir);
+    expect(hub).toBe(path.join(dir, "P.md"));
+  });
+
+  test("defaults to the flat path for a brand-new project (neither exists)", async () => {
+    const dir = await tmpProjekteDir();
+    const hub = await resolveProjectHubFile("Neu", dir);
+    expect(hub).toBe(path.join(dir, "Neu.md"));
+  });
+});
+
+describe("listProjectHubs", () => {
+  test("lists a flat hub and ignores sub-notes in its sibling folder", async () => {
+    const dir = await tmpProjekteDir();
+    await fs.writeFile(path.join(dir, "Homegrow Controller.md"), "x", "utf8");
+    await fs.mkdir(path.join(dir, "Homegrow Controller"), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, "Homegrow Controller", "Architektur.md"),
+      "x",
+      "utf8",
+    );
+    const hubs = await listProjectHubs(dir);
+    expect(hubs).toEqual([
+      { name: "Homegrow Controller", file: path.join(dir, "Homegrow Controller.md") },
+    ]);
+  });
+
+  test("includes a folder hub '<P>/<P>.md' that has no flat counterpart", async () => {
+    const dir = await tmpProjekteDir();
+    await fs.mkdir(path.join(dir, "Vault-MCP-Server"), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, "Vault-MCP-Server", "Vault-MCP-Server.md"),
+      "x",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(dir, "Vault-MCP-Server", "Vault-MCP-Server-Testplan.md"),
+      "x",
+      "utf8",
+    );
+    const hubs = await listProjectHubs(dir);
+    expect(hubs).toEqual([
+      {
+        name: "Vault-MCP-Server",
+        file: path.join(dir, "Vault-MCP-Server", "Vault-MCP-Server.md"),
+      },
+    ]);
+  });
+
+  test("prefers the flat hub over a folder hub of the same name", async () => {
+    const dir = await tmpProjekteDir();
+    await fs.writeFile(path.join(dir, "P.md"), "flat", "utf8");
+    await fs.mkdir(path.join(dir, "P"), { recursive: true });
+    await fs.writeFile(path.join(dir, "P", "P.md"), "folder", "utf8");
+    const hubs = await listProjectHubs(dir);
+    expect(hubs).toEqual([{ name: "P", file: path.join(dir, "P.md") }]);
+  });
+
+  test("returns empty for a missing projects dir", async () => {
+    const hubs = await listProjectHubs(
+      path.join(os.tmpdir(), "vault-projekte-does-not-exist-xyz"),
+    );
+    expect(hubs).toEqual([]);
   });
 });

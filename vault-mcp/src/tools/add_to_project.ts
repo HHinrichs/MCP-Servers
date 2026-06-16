@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { markDirty } from "../lib/git.js";
 import { dedupWarning } from "../lib/dedup.js";
-import { appendUnderSection, noteSizeHint, projectFile, timestampBerlin } from "../lib/vault.js";
+import { appendUnderSection, noteSizeHint, resolveProjectHubFile, timestampBerlin } from "../lib/vault.js";
 
 export const addToProjectTool = {
   name: "add_to_project",
@@ -28,7 +28,7 @@ export const addToProjectTool = {
     text: string;
   }) => {
     const stamp = timestampBerlin();
-    const target = projectFile(project);
+    const target = await resolveProjectHubFile(project);
     await appendUnderSection(target, section, `- _(${stamp})_ ${text}\n`, {
       title: project,
       tags: ["projekt"],

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
-import { VAULT_DIRS, vaultPath } from "../lib/vault.js";
+import { VAULT_DIRS, listProjectHubs, vaultPath } from "../lib/vault.js";
 import { getGit } from "../lib/git.js";
 
 const PROJECT_SNIPPET_CHARS = 600;
@@ -62,23 +62,13 @@ export const getBriefingTool = {
       }),
     );
 
-    // --- Active projects (status: aktiv, or no status set) ---
-    const projectsDir = vaultPath(VAULT_DIRS.projekte);
-    let projectFiles: string[] = [];
-    try {
-      const entries = await fs.readdir(projectsDir, { withFileTypes: true });
-      projectFiles = entries
-        .filter((e) => e.isFile() && e.name.endsWith(".md"))
-        .map((e) => e.name)
-        .sort();
-    } catch {
-      // dir missing — fine
-    }
+    // --- Active projects (status: aktiv/live) — tolerates flat AND folder hubs ---
+    const projectHubs = await listProjectHubs();
 
     const projects = await Promise.all(
-      projectFiles.map(async (f) => {
+      projectHubs.map(async ({ name, file }) => {
         try {
-          const content = await fs.readFile(path.join(projectsDir, f), "utf8");
+          const content = await fs.readFile(file, "utf8");
           const parsed = matter(content);
           const status = String(
             (parsed.data as Record<string, unknown>).status ?? "aktiv",
@@ -89,7 +79,7 @@ export const getBriefingTool = {
             body.length > PROJECT_SNIPPET_CHARS
               ? body.slice(0, PROJECT_SNIPPET_CHARS) + "…"
               : body;
-          return { name: f.replace(/\.md$/, ""), status, snippet };
+          return { name, status, snippet };
         } catch {
           return null;
         }

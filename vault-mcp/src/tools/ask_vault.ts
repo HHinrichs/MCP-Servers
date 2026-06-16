@@ -1,6 +1,8 @@
 import { z } from "zod";
 import path from "node:path";
 import { getSemanticIndex } from "../lib/index_singleton.js";
+import { getReranker } from "../lib/reranker_singleton.js";
+import type { Reranker } from "../lib/reranking.js";
 import { SIM, type SearchHit } from "../lib/semantic_index.js";
 
 /** Keep retrieved hits within this cosine gap of the top hit (trims marginal context). */
@@ -9,13 +11,15 @@ const TOP_GAP = 0.03;
 const PER_NOTE_CAP = 3;
 /** Hard ceiling on the returned context so a few huge sections can't balloon the result. */
 const MAX_TOTAL_CHARS = 8000;
+/** Reranking is on unless explicitly disabled via env. */
+const RERANK_ENABLED = process.env.RERANK_ENABLED !== "false";
 
 function noteName(relPath: string): string {
   return path.basename(relPath, ".md");
 }
 
-/** Diversify + budget the raw hits into the final source set. */
-function select(hits: SearchHit[], limit: number): SearchHit[] {
+/** Diversify + budget the (already sorted-desc) hits into the final source set. */
+function select(hits: SearchHit[], limit: number, gap = TOP_GAP): SearchHit[] {
   if (hits.length === 0) return [];
   const top = hits[0]!.score;
   const perNote = new Map<string, number>();
@@ -23,7 +27,7 @@ function select(hits: SearchHit[], limit: number): SearchHit[] {
   let chars = 0;
   for (const h of hits) {
     if (out.length >= limit) break;
-    if (h.score < top - TOP_GAP) break; // sorted desc → everything after is also out
+    if (h.score < top - gap) break; // sorted desc → everything after is also out
     const n = perNote.get(h.path) ?? 0;
     if (n >= PER_NOTE_CAP) continue;
     if (chars + h.text.length > MAX_TOTAL_CHARS && out.length > 0) continue;
@@ -32,6 +36,31 @@ function select(hits: SearchHit[], limit: number): SearchHit[] {
     chars += h.text.length;
   }
   return out;
+}
+
+/**
+ * 2nd-stage reranking: re-order the retrieved hits by a cross-encoder's relevance
+ * score for the question. Returns the hits unchanged (reranked:false) when no
+ * reranker is configured, there's nothing to reorder, or the model throws — so
+ * ask_vault degrades to embedding order and never fails on account of the reranker.
+ */
+async function applyReranker(
+  reranker: Reranker | null,
+  question: string,
+  hits: SearchHit[],
+): Promise<{ hits: SearchHit[]; reranked: boolean }> {
+  if (!reranker || hits.length < 2) return { hits, reranked: false };
+  try {
+    const scores = await reranker.rerank(question, hits.map((h) => h.text));
+    const ordered = hits
+      .map((h, i) => ({ h, s: scores[i] ?? -Infinity }))
+      .sort((a, b) => b.s - a.s)
+      .map((x) => x.h);
+    return { hits: ordered, reranked: true };
+  } catch (e) {
+    console.error("[ask_vault] rerank failed, using embedding order:", e);
+    return { hits, reranked: false };
+  }
 }
 
 const INSTRUCTION =
@@ -78,7 +107,11 @@ export const askVaultTool = {
         minScore,
         excludeDirs: ["06 Archiv/"],
       });
-      const sources = select(raw, limit);
+      const reranker = RERANK_ENABLED ? getReranker() : null;
+      const ranked = await applyReranker(reranker, question, raw);
+      // After reranking the order is the cross-encoder's, not cosine — so the cosine
+      // TOP_GAP band no longer applies; gate only by per-note-cap + char budget.
+      const sources = select(ranked.hits, limit, ranked.reranked ? Infinity : TOP_GAP);
       if (sources.length === 0) {
         return { content: [{ type: "text" as const, text: "Dazu finde ich nichts Belastbares im Vault." }] };
       }

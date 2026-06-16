@@ -38,6 +38,8 @@ ENV PORT=3000
 # Offline embedding: load the bundled model, never fetch from HuggingFace.
 ENV MODEL_CACHE_DIR=/app/.model-cache
 ENV EMBED_ALLOW_REMOTE=false
+# Offline reranker too: load the bundled cross-encoder, never fetch from HuggingFace.
+ENV RERANK_ALLOW_REMOTE=false
 EXPOSE 3000
 
 # Node 22 ships global fetch — no curl/wget needed in the slim image.

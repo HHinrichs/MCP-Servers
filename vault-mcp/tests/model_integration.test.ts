@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createTransformersEmbedder, cosine, EMBED_DIM } from "../src/lib/embeddings.js";
+import { createTransformersReranker } from "../src/lib/reranking.js";
 import { createSemanticIndex } from "../src/lib/semantic_index.js";
 import { setSemanticIndex } from "../src/lib/index_singleton.js";
 import { askVaultTool } from "../src/tools/ask_vault.js";
@@ -51,6 +52,21 @@ const run = process.env.RUN_MODEL_TESTS === "1";
       const sUnrel = cosine(proxy!, unrelated);
       console.log(`[model] DE↔EN related=${sRel.toFixed(3)} unrelated=${sUnrel.toFixed(3)}`);
       expect(sRel).toBeGreaterThan(sUnrel);
+    },
+    180000,
+  );
+
+  test(
+    "the real reranker scores a relevant passage above an irrelevant one (multilingual)",
+    async () => {
+      process.env.RERANK_ALLOW_REMOTE = "true"; // allow the one-time download
+      const r = createTransformersReranker();
+      const [relevant, irrelevant] = await r.rerank("Wie rotiere ich den Coolify Token?", [
+        "Neuen Bearer-Token generieren, im Coolify-UI als ENV setzen, dann alle Sessions neu starten.",
+        "pH-Wert und EC der Nährlösung steuern das Pflanzenwachstum in der Hydroponik.",
+      ]);
+      console.log(`[reranker] relevant=${relevant?.toFixed(3)} irrelevant=${irrelevant?.toFixed(3)}`);
+      expect(relevant!).toBeGreaterThan(irrelevant!);
     },
     180000,
   );

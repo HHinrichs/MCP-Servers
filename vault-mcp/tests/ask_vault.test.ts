@@ -6,8 +6,21 @@ import { askVaultTool } from "../src/tools/ask_vault.js";
 import { setSemanticIndex } from "../src/lib/index_singleton.js";
 import { createSemanticIndex, type SemanticIndex } from "../src/lib/semantic_index.js";
 import { createFakeEmbedder } from "../src/lib/embeddings.js";
+import { setReranker } from "../src/lib/reranker_singleton.js";
+import type { Reranker } from "../src/lib/reranking.js";
 
-afterEach(() => setSemanticIndex(null));
+afterEach(() => {
+  setSemanticIndex(null);
+  setReranker(null);
+});
+
+/** Test reranker that scores any passage containing `token` highest. */
+function prefer(token: string): Reranker {
+  return {
+    id: "test-prefer",
+    rerank: async (_q, passages) => passages.map((p) => (p.includes(token) ? 100 : 0)),
+  };
+}
 
 async function tmpVault(): Promise<{ root: string; indexPath: string }> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "ask-vault-"));
@@ -116,5 +129,36 @@ describe("ask_vault tool", () => {
     setSemanticIndex(broken);
     const res = await askVaultTool.handler({ question: "Frage die nicht crashen darf" });
     expect(typeof res.content[0]!.text).toBe("string");
+  });
+
+  test("orders the returned sources by the injected reranker", async () => {
+    const { root, indexPath } = await tmpVault();
+    await write(root, "Alpha.md", "---\ntags: []\n---\n\n# Alpha\n\n## S\n\nGEMEINSAM thema inhalt AAASENTINEL hier.\n");
+    await write(root, "Beta.md", "---\ntags: []\n---\n\n# Beta\n\n## S\n\nGEMEINSAM thema inhalt BBBSENTINEL hier.\n");
+    await indexed(root, indexPath);
+    setReranker(prefer("AAASENTINEL"));
+    const out = (await askVaultTool.handler({ question: "GEMEINSAM thema inhalt", limit: 6, ...FAKE_FLOOR })).content[0]!.text;
+    expect(out.indexOf("[[Alpha")).toBeGreaterThanOrEqual(0);
+    expect(out.indexOf("[[Beta")).toBeGreaterThanOrEqual(0);
+    expect(out.indexOf("[[Alpha")).toBeLessThan(out.indexOf("[[Beta")); // Alpha reranked above Beta
+  });
+
+  test("swapping the reranker swaps the source order (reranker is in control)", async () => {
+    const { root, indexPath } = await tmpVault();
+    await write(root, "Alpha.md", "---\ntags: []\n---\n\n# Alpha\n\n## S\n\nGEMEINSAM thema inhalt AAASENTINEL hier.\n");
+    await write(root, "Beta.md", "---\ntags: []\n---\n\n# Beta\n\n## S\n\nGEMEINSAM thema inhalt BBBSENTINEL hier.\n");
+    await indexed(root, indexPath);
+    setReranker(prefer("BBBSENTINEL"));
+    const out = (await askVaultTool.handler({ question: "GEMEINSAM thema inhalt", limit: 6, ...FAKE_FLOOR })).content[0]!.text;
+    expect(out.indexOf("[[Beta")).toBeLessThan(out.indexOf("[[Alpha")); // Beta reranked above Alpha
+  });
+
+  test("falls back to embedding order when the reranker throws (no crash)", async () => {
+    const { root, indexPath } = await tmpVault();
+    await write(root, "a.md", "---\ntags: []\n---\n\n# A\n\n## S\n\nGEMEINSAM thema inhalt FALLBACKSENTINEL hier.\n");
+    await indexed(root, indexPath);
+    setReranker({ id: "boom", rerank: async () => { throw new Error("rerank boom"); } });
+    const out = (await askVaultTool.handler({ question: "GEMEINSAM thema inhalt", ...FAKE_FLOOR })).content[0]!.text;
+    expect(out).toContain("FALLBACKSENTINEL"); // still returns sources, no throw
   });
 });

@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { buildServer } from "./server.js";
 import { ensureRepoCloned, vaultPath } from "./lib/git.js";
 import { configureRealSemanticIndex } from "./lib/index_singleton.js";
+import { configureRealReranker } from "./lib/reranker_singleton.js";
 import { runDailyRecap } from "./jobs/daily_recap.js";
 import { runInboxCuration } from "./jobs/inbox_curation.js";
 
@@ -34,6 +35,19 @@ async function main(): Promise<void> {
         .catch((e) => console.error("[semantic] init failed — find_similar uses TF-IDF fallback:", e));
     } catch (e) {
       console.error("[semantic] disabled (config error):", e);
+    }
+    // ask_vault 2nd-stage reranker: register the lazy cross-encoder (the model
+    // loads on the first ask_vault that reranks, not at boot). ask_vault falls
+    // back to embedding order if it is disabled or fails.
+    if (process.env.RERANK_ENABLED !== "false") {
+      try {
+        const r = configureRealReranker();
+        console.log(`[rerank] enabled (${r.id}, lazy)`);
+      } catch (e) {
+        console.error("[rerank] disabled (config error):", e);
+      }
+    } else {
+      console.log("[rerank] disabled via RERANK_ENABLED=false");
     }
   } else {
     console.log("[semantic] disabled via SEMANTIC_SEARCH=off");

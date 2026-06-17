@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { buildServer } from "./server.js";
-import { ensureRepoCloned, vaultPath } from "./lib/git.js";
+import { ensureRepoCloned, vaultPath, getSyncStatus } from "./lib/git.js";
 import { configureRealSemanticIndex } from "./lib/index_singleton.js";
 import { configureRealReranker } from "./lib/reranker_singleton.js";
 import { runDailyRecap } from "./jobs/daily_recap.js";
@@ -72,6 +72,29 @@ async function main(): Promise<void> {
     { timezone: TZ },
   );
   console.log("[boot] cron jobs scheduled (daily_recap 03:00, inbox_curation 04:00)");
+
+  // 4. Sync-stall watchdog. A failed push silently re-queues every
+  // PUSH_DEBOUNCE_MS; without a heartbeat a wedge (origin conflict that never
+  // resolves) stays invisible — exactly what hid the 2026-06-13 incident for
+  // days. Log a loud, greppable warning while the stall persists; /healthz
+  // exposes the same via sync.stale.
+  const SYNC_WATCH_MS = Number(process.env.SYNC_WATCH_MS ?? "600000"); // 10 min
+  setInterval(() => {
+    void getSyncStatus()
+      .then((s) => {
+        if (s.stale) {
+          console.warn(
+            `[sync] STALL: ${s.ahead} commit(s) unpushed, last successful push ` +
+              `${s.lastPushAgeSec === null ? "never" : `${s.lastPushAgeSec}s ago`} ` +
+              `(${s.consecutivePushFailures} consecutive failures): ${s.lastPushError}`,
+          );
+        }
+      })
+      .catch(() => {
+        /* watchdog must never throw */
+      });
+  }, SYNC_WATCH_MS).unref();
+  console.log(`[boot] sync watchdog every ${Math.round(SYNC_WATCH_MS / 1000)}s`);
 }
 
 main().catch((e) => {

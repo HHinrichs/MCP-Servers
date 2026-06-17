@@ -1,5 +1,6 @@
 import { simpleGit, type SimpleGit } from "simple-git";
 import path from "node:path";
+import { evaluateSync, type SyncState, type SyncStatus } from "./sync_status.js";
 
 const REPO_PATH = process.env.VAULT_REPO_PATH;
 const REPO_REMOTE = process.env.VAULT_REPO_REMOTE;
@@ -72,6 +73,13 @@ let debounceTimer: NodeJS.Timeout | null = null;
 let pendingMessages: string[] = [];
 let inflight: Promise<void> | null = null;
 
+// Push-status tracking, surfaced via getSyncStatus() / /healthz so a silent
+// sync stall (like the 2026-06-13 wedge) becomes visible instead of festering.
+let lastPushOkAt: number | null = null;
+let lastPushError: string | null = null;
+let lastPushAttemptAt: number | null = null;
+let consecutivePushFailures = 0;
+
 async function commitAndPush(): Promise<void> {
   debounceTimer = null;
   const msgs = pendingMessages.slice();
@@ -115,8 +123,15 @@ async function commitAndPush(): Promise<void> {
     }
 
     await git.push("origin", "main");
+    lastPushOkAt = Date.now();
+    lastPushAttemptAt = lastPushOkAt;
+    lastPushError = null;
+    consecutivePushFailures = 0;
     console.log("[git] pushed");
   } catch (e) {
+    lastPushAttemptAt = Date.now();
+    lastPushError = e instanceof Error ? e.message : String(e);
+    consecutivePushFailures += 1;
     console.error("[git] commit/push failed, re-queueing for retry:", e);
     // Re-queue messages so the next flush retries; an already-created commit
     // is picked up via the status.ahead branch above.
@@ -146,6 +161,30 @@ export async function flushNow(): Promise<void> {
   }
   inflight = (inflight ?? Promise.resolve()).then(commitAndPush);
   await inflight;
+}
+
+/**
+ * Best-effort sync status for /healthz. `ahead` is counted against the cached
+ * origin/main ref (refreshed by the pull-rebase each push cycle); a successful
+ * push updates it to 0. Combined with lastPushError this exposes a stall.
+ */
+export async function getSyncStatus(): Promise<SyncStatus> {
+  let ahead = 0;
+  try {
+    const out = await git.raw(["rev-list", "--count", "origin/main..HEAD"]);
+    ahead = Number.parseInt(out.trim(), 10) || 0;
+  } catch {
+    // best-effort: origin/main may be absent right after a fresh clone
+  }
+  const state: SyncState = {
+    lastPushOkAt,
+    lastPushError,
+    lastPushAttemptAt,
+    consecutivePushFailures,
+    ahead,
+    pendingMessages: pendingMessages.length,
+  };
+  return evaluateSync(state, Date.now());
 }
 
 export function getGit(): SimpleGit {

@@ -24,7 +24,7 @@ FROM node:22-bookworm-slim AS runtime
 # libgomp1: onnxruntime-node links OpenMP and bookworm-slim does not ship it
 # (without it the first inference throws 'libgomp.so.1: cannot open shared object').
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git openssh-client ca-certificates libgomp1 \
+    git ca-certificates libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

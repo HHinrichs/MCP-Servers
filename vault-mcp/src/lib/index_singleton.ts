@@ -19,9 +19,10 @@ export function setSemanticIndex(idx: SemanticIndex | null): void {
 }
 
 /**
- * Resolve the index file path and assert it lives OUTSIDE the vault repo — a
- * path inside the repo would be committed + pushed by the 30s git debounce
- * (churn + leaking vectors into the synced vault). Throws on violation.
+ * Resolve the index file path and assert it lives OUTSIDE the vault repo — the
+ * mirror is hard-reset to origin (`git reset --hard`) on every refresh, which
+ * would WIPE an in-repo index; an in-repo path would also churn the vault.
+ * Throws on violation.
  */
 export function resolveIndexPath(vaultRoot: string, envValue?: string): string {
   const indexPath = envValue && envValue.trim() ? envValue.trim() : path.join(path.dirname(vaultRoot), "semantic-index.json");
@@ -29,7 +30,7 @@ export function resolveIndexPath(vaultRoot: string, envValue?: string): string {
   const resolved = path.resolve(indexPath);
   if (resolved === repo || resolved.startsWith(repo + path.sep)) {
     throw new Error(
-      `SEMANTIC_INDEX_PATH must be OUTSIDE the vault repo — '${indexPath}' is inside '${vaultRoot}' and would be auto-committed.`,
+      `SEMANTIC_INDEX_PATH must be OUTSIDE the vault repo — '${indexPath}' is inside '${vaultRoot}' and would be wiped by the mirror reset.`,
     );
   }
   return resolved;

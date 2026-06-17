@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { markDirty } from "../lib/git.js";
 import { dedupWarning } from "../lib/dedup.js";
-import { appendUnderSection, areaFile, noteSizeHint, timestampBerlin } from "../lib/vault.js";
+import { getWriter } from "../lib/writer_singleton.js";
+import { appendUnderSectionContent } from "../lib/transforms.js";
+import { areaFile, noteSizeHint, relFromVault, timestampBerlin } from "../lib/vault.js";
 
 export const addToAreaTool = {
   name: "add_to_area",
@@ -23,11 +24,11 @@ export const addToAreaTool = {
   }) => {
     const stamp = timestampBerlin();
     const target = areaFile(area);
-    await appendUnderSection(target, section, `- _(${stamp})_ ${text}\n`, {
-      title: area,
-      tags: ["bereich"],
-    });
-    markDirty(`add_to_area ${area} / ${section}`);
+    await getWriter().writeToOrigin(
+      relFromVault(target),
+      (raw) => appendUnderSectionContent(raw, section, `- _(${stamp})_ ${text}\n`, { title: area, tags: ["bereich"] }),
+      `add_to_area ${area} / ${section}`,
+    );
     const hint = await noteSizeHint(target);
     const dedup = await dedupWarning(text, target);
     const body =

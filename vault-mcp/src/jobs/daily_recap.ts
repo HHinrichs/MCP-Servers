@@ -1,5 +1,7 @@
-import { flushNow, getGit, markDirty } from "../lib/git.js";
-import { appendUnderSection, dailyFile, timestampBerlin } from "../lib/vault.js";
+import { getGit, refreshMirror } from "../lib/git.js";
+import { getWriter } from "../lib/writer_singleton.js";
+import { appendUnderSectionContent } from "../lib/transforms.js";
+import { dailyFile, relFromVault, timestampBerlin } from "../lib/vault.js";
 
 /** YYYY-MM-DD for "yesterday" in Europe/Berlin. */
 function yesterdayBerlin(): string {
@@ -26,6 +28,7 @@ export async function runDailyRecap(): Promise<void> {
   const yesterday = yesterdayBerlin();
   console.log(`[daily_recap] running for ${yesterday} (mental day ${yesterday})`);
 
+  await refreshMirror(); // pull the API-made bot commits into the mirror before reading the log
   const git = getGit();
   const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const log = await git.log([
@@ -56,11 +59,10 @@ export async function runDailyRecap(): Promise<void> {
     lines.join("\n") +
     `\n`;
 
-  await appendUnderSection(dailyFile(yesterday), "Tagesübersicht (auto)", block, {
-    title: yesterday,
-    tags: ["daily"],
-  });
-  markDirty(`daily_recap ${yesterday}`);
-  await flushNow();
+  await getWriter().writeToOrigin(
+    relFromVault(dailyFile(yesterday)),
+    (raw) => appendUnderSectionContent(raw, "Tagesübersicht (auto)", block, { title: yesterday, tags: ["daily"] }),
+    `daily_recap ${yesterday}`,
+  );
   console.log("[daily_recap] done");
 }

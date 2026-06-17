@@ -1,28 +1,19 @@
 import { simpleGit, type SimpleGit } from "simple-git";
 import path from "node:path";
-import { evaluateSync, type SyncState, type SyncStatus } from "./sync_status.js";
 
 const REPO_PATH = process.env.VAULT_REPO_PATH;
-const REPO_REMOTE = process.env.VAULT_REPO_REMOTE;
-const SSH_KEY_PATH = process.env.SSH_KEY_PATH;
-const AUTHOR_NAME = process.env.GIT_AUTHOR_NAME ?? "Vault MCP";
-const AUTHOR_EMAIL = process.env.GIT_AUTHOR_EMAIL ?? "mcp@verdara-homegrow.de";
-const DEBOUNCE_MS = Number(process.env.PUSH_DEBOUNCE_MS ?? "30000");
+const REPO_REMOTE = process.env.VAULT_REPO_REMOTE; // https://github.com/<owner>/<repo>.git
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const BRANCH = process.env.VAULT_REPO_BRANCH ?? "main";
 
-if (!REPO_PATH || !REPO_REMOTE || !SSH_KEY_PATH) {
-  throw new Error("VAULT_REPO_PATH, VAULT_REPO_REMOTE, SSH_KEY_PATH must be set");
+if (!REPO_PATH || !REPO_REMOTE || !GITHUB_TOKEN) {
+  throw new Error("VAULT_REPO_PATH, VAULT_REPO_REMOTE, GITHUB_TOKEN must be set");
 }
 
-// Configure git's SSH command via env var — git reads it natively, no need
-// for simple-git's `allowUnsafeSshCommand` opt-in. known_hosts is written to
-// /tmp because the container's $HOME (/home/node) is read-only-ish without prep.
-process.env.GIT_SSH_COMMAND = [
-  "ssh",
-  `-i ${SSH_KEY_PATH}`,
-  "-o IdentitiesOnly=yes",
-  "-o UserKnownHostsFile=/tmp/known_hosts",
-  "-o StrictHostKeyChecking=accept-new",
-].join(" ");
+/** Remote URL with the token injected for HTTPS auth (never logged). */
+function authedRemote(): string {
+  return REPO_REMOTE!.replace("https://", `https://x-access-token:${GITHUB_TOKEN}@`);
+}
 
 const git: SimpleGit = simpleGit(REPO_PATH);
 
@@ -30,6 +21,15 @@ export function vaultPath(...segments: string[]): string {
   return path.join(REPO_PATH!, ...segments);
 }
 
+export function getGit(): SimpleGit {
+  return git;
+}
+
+/**
+ * Clone if absent; otherwise hard-reset to origin. Safe to call at boot — the
+ * mirror never holds local-only work (all writes go origin-first via the
+ * GitHub API), so a reset can never lose data or wedge.
+ */
 export async function ensureRepoCloned(): Promise<void> {
   const fs = await import("node:fs/promises");
   let present = false;
@@ -39,154 +39,31 @@ export async function ensureRepoCloned(): Promise<void> {
   } catch {
     present = false;
   }
-
   if (!present) {
     console.log(`[git] cloning ${REPO_REMOTE} -> ${REPO_PATH}`);
-    const parent = path.dirname(REPO_PATH!);
-    await fs.mkdir(parent, { recursive: true });
-    await simpleGit().clone(REPO_REMOTE!, REPO_PATH!);
+    await fs.mkdir(path.dirname(REPO_PATH!), { recursive: true });
+    await simpleGit().clone(authedRemote(), REPO_PATH!);
+    await git.remote(["set-url", "origin", authedRemote()]);
   } else {
-    console.log(`[git] repo present at ${REPO_PATH}, fetching latest`);
-    // A conflicting pull must never crash the boot (restart loop) or leave the
-    // repo in a half-rebase state. Worst case we run on a slightly stale
-    // checkout; the push path retries the rebase on the next write anyway.
+    console.log(`[git] repo present at ${REPO_PATH}, hard-resetting mirror to origin`);
+    await git.remote(["set-url", "origin", authedRemote()]);
+    await refreshMirror();
+  }
+}
+
+let refreshing: Promise<void> | null = null;
+/** fetch + hard-reset the mirror to origin/<branch>. Single-flight. */
+export function refreshMirror(): Promise<void> {
+  if (refreshing) return refreshing;
+  refreshing = (async () => {
     try {
-      await git.fetch();
-      await git.pull("origin", "main", { "--rebase": "true" });
+      await git.fetch("origin", BRANCH);
+      await git.reset(["--hard", `origin/${BRANCH}`]);
     } catch (e) {
-      console.error("[git] boot pull failed — aborting any in-progress rebase and continuing:", e);
-      try {
-        await git.rebase(["--abort"]);
-      } catch {
-        // no rebase in progress
-      }
+      console.error("[git] mirror refresh failed (will retry next tick):", e);
+    } finally {
+      refreshing = null;
     }
-  }
-
-  await git.addConfig("user.name", AUTHOR_NAME, false, "local");
-  await git.addConfig("user.email", AUTHOR_EMAIL, false, "local");
-}
-
-// --- Debounced commit + push ---
-
-let debounceTimer: NodeJS.Timeout | null = null;
-let pendingMessages: string[] = [];
-let inflight: Promise<void> | null = null;
-
-// Push-status tracking, surfaced via getSyncStatus() / /healthz so a silent
-// sync stall (like the 2026-06-13 wedge) becomes visible instead of festering.
-let lastPushOkAt: number | null = null;
-let lastPushError: string | null = null;
-let lastPushAttemptAt: number | null = null;
-let consecutivePushFailures = 0;
-
-async function commitAndPush(): Promise<void> {
-  debounceTimer = null;
-  const msgs = pendingMessages.slice();
-  pendingMessages = [];
-
-  try {
-    await git.add(".");
-    const status = await git.status();
-
-    if (status.files.length > 0) {
-      const summary: string =
-        msgs.length === 0
-          ? "vault update"
-          : msgs.length === 1
-            ? (msgs[0] ?? "vault update")
-            : `vault-mcp: ${msgs.length} updates\n\n${msgs.map((m) => `- ${m}`).join("\n")}`;
-      await git.commit(summary);
-      console.log(`[git] committed: ${summary.split("\n")[0] ?? summary}`);
-    } else if (status.ahead === 0) {
-      // Nothing staged and nothing waiting to go out.
-      if (msgs.length > 0) console.log("[git] nothing to commit");
-      return;
-    } else {
-      // Nothing staged, but an earlier commit never made it out (push failed
-      // after a successful commit). Fall through and push it now.
-      console.log(`[git] ${status.ahead} unpushed commit(s) pending — pushing`);
-    }
-
-    // Rebase onto remote before pushing (Hannes pushes to the same repo).
-    // A failed rebase is aborted immediately so the repo never sits in a
-    // half-rebase state; the push below then surfaces the real divergence.
-    try {
-      await git.pull("origin", "main", { "--rebase": "true" });
-    } catch (e) {
-      console.warn("[git] rebase pull failed — aborting rebase:", e);
-      try {
-        await git.rebase(["--abort"]);
-      } catch {
-        // no rebase in progress
-      }
-    }
-
-    await git.push("origin", "main");
-    lastPushOkAt = Date.now();
-    lastPushAttemptAt = lastPushOkAt;
-    lastPushError = null;
-    consecutivePushFailures = 0;
-    console.log("[git] pushed");
-  } catch (e) {
-    lastPushAttemptAt = Date.now();
-    lastPushError = e instanceof Error ? e.message : String(e);
-    consecutivePushFailures += 1;
-    console.error("[git] commit/push failed, re-queueing for retry:", e);
-    // Re-queue messages so the next flush retries; an already-created commit
-    // is picked up via the status.ahead branch above.
-    pendingMessages.unshift(...msgs);
-    scheduleFlush();
-  }
-}
-
-function scheduleFlush(): void {
-  if (debounceTimer) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    // Chain onto any in-flight push to serialize.
-    inflight = (inflight ?? Promise.resolve()).then(commitAndPush);
-  }, DEBOUNCE_MS);
-}
-
-export function markDirty(message: string): void {
-  pendingMessages.push(message);
-  scheduleFlush();
-}
-
-/** Force-flush pending changes immediately (used by background jobs). */
-export async function flushNow(): Promise<void> {
-  if (debounceTimer) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
-  inflight = (inflight ?? Promise.resolve()).then(commitAndPush);
-  await inflight;
-}
-
-/**
- * Best-effort sync status for /healthz. `ahead` is counted against the cached
- * origin/main ref (refreshed by the pull-rebase each push cycle); a successful
- * push updates it to 0. Combined with lastPushError this exposes a stall.
- */
-export async function getSyncStatus(): Promise<SyncStatus> {
-  let ahead = 0;
-  try {
-    const out = await git.raw(["rev-list", "--count", "origin/main..HEAD"]);
-    ahead = Number.parseInt(out.trim(), 10) || 0;
-  } catch {
-    // best-effort: origin/main may be absent right after a fresh clone
-  }
-  const state: SyncState = {
-    lastPushOkAt,
-    lastPushError,
-    lastPushAttemptAt,
-    consecutivePushFailures,
-    ahead,
-    pendingMessages: pendingMessages.length,
-  };
-  return evaluateSync(state, Date.now());
-}
-
-export function getGit(): SimpleGit {
-  return git;
+  })();
+  return refreshing;
 }

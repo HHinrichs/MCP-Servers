@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { promises as fs } from "node:fs";
-import path from "node:path";
-import { markDirty } from "../lib/git.js";
+import { getWriter } from "../lib/writer_singleton.js";
 import { isProtectedRootFile, resolveVaultPath } from "../lib/vault.js";
 
 export const moveNoteTool = {
@@ -43,9 +42,18 @@ export const moveNoteTool = {
     } catch {
       // OK, doesn't exist yet
     }
-    await fs.mkdir(path.dirname(dst), { recursive: true });
-    await fs.rename(src, dst);
-    markDirty(`move_note ${from} -> ${to}`);
+    await getWriter().writeMulti(
+      [from],
+      (raws) => {
+        const content = raws[0];
+        if (content == null) throw new Error(`source vanished: ${from}`);
+        return [
+          { path: from, delete: true },
+          { path: to, content },
+        ];
+      },
+      `move_note ${from} -> ${to}`,
+    );
     return {
       content: [{ type: "text" as const, text: `Verschoben: ${from} → ${to}` }],
     };

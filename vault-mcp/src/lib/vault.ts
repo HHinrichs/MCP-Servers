@@ -275,6 +275,11 @@ export function resolveVaultPath(rel: string): string {
   return target;
 }
 
+/** Repo-relative POSIX path of an absolute vault path (for GitHub API addressing). */
+export function relFromVault(absPath: string): string {
+  return path.relative(vaultPath(), absPath).split(path.sep).join("/");
+}
+
 // --- Size awareness ---
 
 /** Soft warning: file is getting large, watch out. */

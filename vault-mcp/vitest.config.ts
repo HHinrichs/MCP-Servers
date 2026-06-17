@@ -12,10 +12,11 @@ mkdirSync(TEST_VAULT, { recursive: true });
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
+    setupFiles: ["./tests/setup.ts"],
     env: {
       VAULT_REPO_PATH: TEST_VAULT,
-      VAULT_REPO_REMOTE: "git@example.invalid:nobody/nothing.git",
-      SSH_KEY_PATH: path.join(TEST_VAULT, "no-such-key"),
+      VAULT_REPO_REMOTE: "https://github.com/nobody/nothing.git",
+      GITHUB_TOKEN: "test-token",
     },
   },
 });

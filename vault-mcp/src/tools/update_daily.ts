@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { markDirty } from "../lib/git.js";
-import { appendUnderSection, dailyFile, timestampBerlin, todayBerlin } from "../lib/vault.js";
+import { getWriter } from "../lib/writer_singleton.js";
+import { appendUnderSectionContent } from "../lib/transforms.js";
+import { dailyFile, relFromVault, timestampBerlin, todayBerlin } from "../lib/vault.js";
 
 export const updateDailyTool = {
   name: "update_daily",
@@ -12,13 +13,11 @@ export const updateDailyTool = {
   handler: async ({ text }: { text: string }) => {
     const stamp = timestampBerlin();
     const today = todayBerlin();
-    await appendUnderSection(
-      dailyFile(today),
-      null,
-      `### ${stamp}\n\n${text}\n`,
-      { title: today, tags: ["daily"] },
+    await getWriter().writeToOrigin(
+      relFromVault(dailyFile(today)),
+      (raw) => appendUnderSectionContent(raw, null, `### ${stamp}\n\n${text}\n`, { title: today, tags: ["daily"] }),
+      `update_daily ${today}`,
     );
-    markDirty(`update_daily ${today}`);
     return {
       content: [{ type: "text" as const, text: `Daily Note für ${today} aktualisiert.` }],
     };

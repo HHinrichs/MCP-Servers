@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { markDirty } from "../lib/git.js";
 import { dedupWarning } from "../lib/dedup.js";
-import { appendUnderSection, noteSizeHint, resolveProjectHubFile, timestampBerlin } from "../lib/vault.js";
+import { getWriter } from "../lib/writer_singleton.js";
+import { appendUnderSectionContent } from "../lib/transforms.js";
+import { noteSizeHint, relFromVault, resolveProjectHubFile, timestampBerlin } from "../lib/vault.js";
 
 export const addToProjectTool = {
   name: "add_to_project",
@@ -29,11 +30,11 @@ export const addToProjectTool = {
   }) => {
     const stamp = timestampBerlin();
     const target = await resolveProjectHubFile(project);
-    await appendUnderSection(target, section, `- _(${stamp})_ ${text}\n`, {
-      title: project,
-      tags: ["projekt"],
-    });
-    markDirty(`add_to_project ${project} / ${section}`);
+    await getWriter().writeToOrigin(
+      relFromVault(target),
+      (raw) => appendUnderSectionContent(raw, section, `- _(${stamp})_ ${text}\n`, { title: project, tags: ["projekt"] }),
+      `add_to_project ${project} / ${section}`,
+    );
     const hint = await noteSizeHint(target);
     const dedup = await dedupWarning(text, target);
     const body =

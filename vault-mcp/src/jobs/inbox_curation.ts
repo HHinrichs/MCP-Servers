@@ -1,14 +1,14 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
-import { flushNow, markDirty } from "../lib/git.js";
+import { getWriter } from "../lib/writer_singleton.js";
+import { createNoteContent } from "../lib/transforms.js";
 import {
   VAULT_DIRS,
   curationFile,
-  ensureDir,
+  relFromVault,
   todayBerlin,
   vaultPath,
-  writeMarkdown,
 } from "../lib/vault.js";
 
 /**
@@ -125,14 +125,10 @@ export async function runInboxCuration(): Promise<void> {
     sections +
     `\n`;
 
-  const file = curationFile();
-  await ensureDir(file);
-  await writeMarkdown(
-    file,
-    { tags: ["inbox", "kuratierung"], erstellt: today, updated: today },
-    `\n# Inbox-Kuratierung\n${content}`,
+  await getWriter().writeToOrigin(
+    relFromVault(curationFile()),
+    () => createNoteContent({ tags: ["inbox", "kuratierung"], erstellt: today }, `\n# Inbox-Kuratierung\n${content}`),
+    `inbox_curation: ${stale.length} stale notes`,
   );
-  markDirty(`inbox_curation: ${stale.length} stale notes`);
-  await flushNow();
   console.log("[inbox_curation] done");
 }

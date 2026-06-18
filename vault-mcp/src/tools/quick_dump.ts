@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { markDirty } from "../lib/git.js";
+import { getWriter } from "../lib/writer_singleton.js";
+import { createNoteContent } from "../lib/transforms.js";
 import {
   VAULT_DIRS,
   readIfExists,
@@ -7,7 +8,6 @@ import {
   timestampBerlin,
   todayBerlin,
   vaultPath,
-  writeMarkdown,
 } from "../lib/vault.js";
 
 /** Derive a short filename title from the first words of the text. */
@@ -49,13 +49,12 @@ export const quickDumpTool = {
       name = `${fileStamp} ${cleanTitle} ${i}.md`;
     }
 
-    const abs = vaultPath(VAULT_DIRS.inbox, name);
-    await writeMarkdown(
-      abs,
-      { tags: ["inbox"], erstellt: todayBerlin() },
-      `\n# ${cleanTitle}\n\n${text}\n`,
+    const rel = `${VAULT_DIRS.inbox}/${name}`;
+    await getWriter().writeToOrigin(
+      rel,
+      () => createNoteContent({ tags: ["inbox"], erstellt: todayBerlin() }, `\n# ${cleanTitle}\n\n${text}\n`),
+      `quick_dump ${name}`,
     );
-    markDirty(`quick_dump ${name}`);
     return {
       content: [
         {

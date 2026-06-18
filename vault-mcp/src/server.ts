@@ -4,7 +4,8 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { bearerAuth, originGuard } from "./lib/auth.js";
 import { loadInstructions } from "./lib/instructions.js";
 import { registerAllTools } from "./tools/index.js";
-import { getSyncStatus } from "./lib/git.js";
+import { getWriteHealth } from "./lib/writes.js";
+import { evaluateSync } from "./lib/sync_status.js";
 
 // Server instructions live in the vault itself: AGENTS.md in the vault root
 // is the single source of truth and is loaded per request. Editing that file
@@ -29,17 +30,9 @@ export async function buildServer(): Promise<ServerHandles> {
   // 200 for liveness — a sync stall must not fail the check (that would cause a
   // container restart loop that can't resolve a content conflict). The stall
   // signal lives in the body as `sync.stale`; monitor that, not the status code.
-  app.get("/healthz", async (_req, res) => {
-    try {
-      const sync = await getSyncStatus();
-      res.json({ status: "ok", sync });
-    } catch (e) {
-      res.json({
-        status: "ok",
-        sync: null,
-        syncError: e instanceof Error ? e.message : String(e),
-      });
-    }
+  app.get("/healthz", (_req, res) => {
+    const sync = evaluateSync(getWriteHealth(), Date.now());
+    res.json({ status: "ok", sync });
   });
 
   // JSON body parsing for /mcp POSTs.

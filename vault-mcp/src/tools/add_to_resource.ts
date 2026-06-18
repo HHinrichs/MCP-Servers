@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { markDirty } from "../lib/git.js";
 import { dedupWarning } from "../lib/dedup.js";
-import { appendUnderSection, noteSizeHint, resourceFile, timestampBerlin } from "../lib/vault.js";
+import { getWriter } from "../lib/writer_singleton.js";
+import { appendUnderSectionContent } from "../lib/transforms.js";
+import { noteSizeHint, relFromVault, resourceFile, timestampBerlin } from "../lib/vault.js";
 
 export const addToResourceTool = {
   name: "add_to_resource",
@@ -14,11 +15,11 @@ export const addToResourceTool = {
   handler: async ({ topic, text }: { topic: string; text: string }) => {
     const stamp = timestampBerlin();
     const target = resourceFile(topic);
-    await appendUnderSection(target, "Notizen", `- _(${stamp})_ ${text}\n`, {
-      title: topic,
-      tags: ["ressource"],
-    });
-    markDirty(`add_to_resource ${topic}`);
+    await getWriter().writeToOrigin(
+      relFromVault(target),
+      (raw) => appendUnderSectionContent(raw, "Notizen", `- _(${stamp})_ ${text}\n`, { title: topic, tags: ["ressource"] }),
+      `add_to_resource ${topic}`,
+    );
     const hint = await noteSizeHint(target);
     const dedup = await dedupWarning(text, target);
     const body =

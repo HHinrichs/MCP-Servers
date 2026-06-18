@@ -1,15 +1,14 @@
 import { z } from "zod";
 import path from "node:path";
 import matter from "gray-matter";
-import { markDirty } from "../lib/git.js";
+import { getWriter } from "../lib/writer_singleton.js";
+import { splitNoteContent } from "../lib/transforms.js";
 import {
   escapeRegex,
   isProtectedRootFile,
   readIfExists,
   resolveVaultPath,
   timestampBerlin,
-  todayBerlin,
-  writeMarkdown,
 } from "../lib/vault.js";
 
 function err(text: string) {
@@ -65,34 +64,28 @@ export const splitNoteTool = {
     if (!headerMatch || headerMatch.index === undefined) {
       return err(`Section '## ${section}' nicht gefunden in ${source}`);
     }
-    const contentStart = headerMatch.index + headerMatch[0].length;
-
-    // The section ends at the next '#' or '##' heading — deeper headings
-    // ('###'…) are subsections and move along with the extracted content.
-    const remainder = body.slice(contentStart);
-    const nextMatch = remainder.match(/^#{1,2} /m);
-    const contentEnd =
-      nextMatch && nextMatch.index !== undefined ? contentStart + nextMatch.index : body.length;
-
-    const extracted = body.slice(contentStart, contentEnd).trim();
     const stamp = timestampBerlin();
     const sourceName = path.basename(source, ".md");
     const targetName = path.basename(target, ".md");
-
-    const sourceTags = Array.isArray(parsed.data.tags) ? parsed.data.tags : [];
-    await writeMarkdown(
-      dstAbs,
-      { tags: sourceTags, erstellt: todayBerlin() },
-      `\n# ${targetName}\n\n_(Ausgelagert aus [[${sourceName}]] am ${stamp})_\n\n${extracted}\n`,
+    await getWriter().writeMulti(
+      [source],
+      (raws) => {
+        const fresh = raws[0];
+        if (fresh == null) throw new Error(`source vanished: ${source}`);
+        const { source: newSource, target: newTarget } = splitNoteContent(
+          fresh,
+          section,
+          targetName,
+          sourceName,
+          stamp,
+        );
+        return [
+          { path: source, content: newSource },
+          { path: target, content: newTarget },
+        ];
+      },
+      `split_note ${source} § ${section} -> ${target}`,
     );
-
-    const newBody =
-      body.slice(0, contentStart).replace(/\s+$/, "") +
-      `\n\n→ ausgelagert nach [[${targetName}]] _(${stamp})_\n\n` +
-      body.slice(contentEnd);
-    await writeMarkdown(srcAbs, parsed.data, newBody);
-
-    markDirty(`split_note ${source} § ${section} -> ${target}`);
     return {
       content: [
         {

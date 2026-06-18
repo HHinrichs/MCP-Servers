@@ -1,38 +1,27 @@
 export interface SyncState {
-  /** ms epoch of the last successful push, or null if none yet this process. */
-  lastPushOkAt: number | null;
-  /** Error message of the most recent push attempt, or null if it succeeded. */
-  lastPushError: string | null;
-  /** ms epoch of the most recent push attempt (success or failure). */
-  lastPushAttemptAt: number | null;
-  /** Consecutive failed push attempts (reset to 0 on success). */
-  consecutivePushFailures: number;
-  /** Local commits not yet on origin/main. */
-  ahead: number;
-  /** Write messages queued but not yet committed. */
-  pendingMessages: number;
+  /** ms epoch of the last successful origin write, or null if none yet this process. */
+  lastWriteOkAt: number | null;
+  /** Error message of the most recent write, or null if it succeeded. */
+  lastWriteError: string | null;
+  /** Consecutive failed writes (reset to 0 on success). */
+  consecutiveWriteFailures: number;
 }
 
 export interface SyncStatus extends SyncState {
-  /** Seconds since the last successful push, or null if none yet this process. */
-  lastPushAgeSec: number | null;
-  /** True when there are unpushed commits AND the last push attempt failed. */
+  /** Seconds since the last successful write, or null if none yet this process. */
+  lastWriteAgeSec: number | null;
+  /** True when the last write attempt failed (token expired, GitHub down, …). */
   stale: boolean;
 }
 
 /**
- * Derive the reportable sync status from raw push-tracking state.
- *
- * `stale` is intentionally narrow: being a few commits ahead is normal (the
- * push debounce window). It only counts as a stall when there is something to
- * push AND the last push attempt actually failed — that is the silent-wedge
- * signal that went unnoticed for days in the 2026-06-13 incident.
+ * Derive the reportable sync status from raw write-health state. Writes are
+ * origin-first and synchronous, so there is no "ahead" notion anymore — a stall
+ * is simply "the last write failed", surfaced via /healthz `sync.stale`.
  */
 export function evaluateSync(state: SyncState, now: number): SyncStatus {
-  const lastPushAgeSec =
-    state.lastPushOkAt === null
-      ? null
-      : Math.max(0, Math.round((now - state.lastPushOkAt) / 1000));
-  const stale = state.ahead > 0 && state.lastPushError !== null;
-  return { ...state, lastPushAgeSec, stale };
+  const lastWriteAgeSec =
+    state.lastWriteOkAt === null ? null : Math.max(0, Math.round((now - state.lastWriteOkAt) / 1000));
+  const stale = state.lastWriteError !== null;
+  return { ...state, lastWriteAgeSec, stale };
 }

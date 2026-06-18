@@ -1,6 +1,6 @@
 # vault-mcp
 
-MCP server that reads, writes, and searches Markdown notes in the `HHinrichs/Second-Brain` Obsidian vault and auto-pushes changes to GitHub.
+MCP server that reads, writes, and searches Markdown notes in the `HHinrichs/Second-Brain` Obsidian vault. Writes go **origin-first via the GitHub API** (compare-and-swap on the branch ref, so two writers can never wedge); the local clone is a **read-only mirror** for the embedding search, refreshed via HTTPS.
 
 ## Server instructions
 
@@ -37,11 +37,13 @@ The behavioral rules served to MCP clients live **in the vault itself**: `AGENTS
 | `MCP_BEARER_TOKEN` | Yes | Static bearer token for client auth. Generate with `openssl rand -hex 32`. |
 | `MCP_ALLOWED_ORIGINS` | No | Comma-separated whitelist for the `Origin` header (DNS-rebinding protection). Empty allows requests without an Origin header (CLI clients). |
 | `VAULT_REPO_PATH` | Yes | Path inside container where the vault is cloned (e.g. `/data/vault/repo`). |
-| `VAULT_REPO_REMOTE` | Yes | `git@github.com:HHinrichs/Second-Brain.git` |
-| `SSH_KEY_PATH` | Yes | Path to the deploy-key private file inside the container (e.g. `/data/vault/ssh/id_ed25519`). |
+| `VAULT_REPO_REMOTE` | Yes | HTTPS clone URL, e.g. `https://github.com/HHinrichs/Second-Brain.git`. The token is injected at runtime — do not put it in the URL. |
+| `GITHUB_TOKEN` | Yes | Fine-grained PAT with `Contents: read+write` on the vault repo. Used for both the API writes and the HTTPS mirror fetch. |
+| `VAULT_REPO_BRANCH` | No | Default `main`. |
 | `GIT_AUTHOR_NAME` | No | Default `Vault MCP`. |
 | `GIT_AUTHOR_EMAIL` | No | Default `mcp@verdara-homegrow.de`. |
-| `PUSH_DEBOUNCE_MS` | No | Default `30000` (30s). |
+| `MIRROR_REFRESH_MS` | No | Default `45000` (45s). How often the read mirror pulls external changes (direct-mode pushes, Obsidian). |
+| `SEMANTIC_INDEX_PATH` | No | Index cache file path. MUST be outside the repo dir — a `reset --hard` of the mirror would wipe an in-repo index. Default `<repo-parent>/semantic-index.json`. |
 | `PORT` | No | Default `3000`. |
 | `TZ` | No | Default `Europe/Berlin` (drives the cron schedules). |
 
@@ -49,12 +51,12 @@ The behavioral rules served to MCP clients live **in the vault itself**: `AGENTS
 
 Streamable HTTP MCP endpoint at `POST/GET /mcp`. Auth via `Authorization: Bearer <token>`.
 
-Health check at `GET /healthz` (returns `ok` without auth).
+Health check at `GET /healthz` (no auth). Returns JSON `{"status":"ok","sync":{…}}` and **always HTTP 200** — a write stall surfaces as `sync.stale:true` in the body, never via the status code (so a stall can't trigger a container restart loop).
 
 ## Local dev
 
 ```bash
 npm install
 npm test        # vitest unit tests (no git/network access needed)
-MCP_BEARER_TOKEN=dev VAULT_REPO_PATH=./tmp-vault VAULT_REPO_REMOTE=... SSH_KEY_PATH=~/.ssh/id_ed25519 npm run dev
+MCP_BEARER_TOKEN=dev VAULT_REPO_PATH=./tmp-vault VAULT_REPO_REMOTE=https://github.com/HHinrichs/Second-Brain.git GITHUB_TOKEN=github_pat_... npm run dev
 ```

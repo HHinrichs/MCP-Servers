@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { markDirty } from "../lib/git.js";
 import { dedupWarning } from "../lib/dedup.js";
+import { getWriter } from "../lib/writer_singleton.js";
+import { appendUnderSectionContent } from "../lib/transforms.js";
 import {
   KONTEXT_FILES,
-  appendUnderSection,
   kontextFile,
   noteSizeHint,
+  relFromVault,
   timestampBerlin,
 } from "../lib/vault.js";
 
@@ -36,11 +37,11 @@ export const addToContextTool = {
   }) => {
     const stamp = timestampBerlin();
     const target = kontextFile(file);
-    await appendUnderSection(target, section, `- _(${stamp})_ ${text}\n`, {
-      title: file,
-      tags: ["kontext"],
-    });
-    markDirty(`add_to_context ${file} / ${section}`);
+    await getWriter().writeToOrigin(
+      relFromVault(target),
+      (raw) => appendUnderSectionContent(raw, section, `- _(${stamp})_ ${text}\n`, { title: file, tags: ["kontext"] }),
+      `add_to_context ${file} / ${section}`,
+    );
     const hint = await noteSizeHint(target);
     const dedup = await dedupWarning(text, target);
     const body =

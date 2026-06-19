@@ -32,7 +32,13 @@ export const deleteSectionTool = {
     if (isProtectedRootFile(file)) {
       return err("AGENTS.md / CLAUDE.md im Vault-Root sind die Regelquelle des Servers und dürfen nicht editiert werden.");
     }
-    if ((await readIfExists(resolveVaultPath(file))) === null) {
+    let abs: string;
+    try {
+      abs = resolveVaultPath(file);
+    } catch {
+      return err(`Pfad verlässt das Vault, abgebrochen: ${file}`);
+    }
+    if ((await readIfExists(abs)) === null) {
       return err(`Datei existiert nicht: ${file}`);
     }
     try {

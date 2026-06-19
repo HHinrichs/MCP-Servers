@@ -17,6 +17,7 @@ export const createNoteTool = {
     path: z
       .string()
       .min(1)
+      .regex(/\.md$/, "Pfad muss auf .md enden")
       .describe("Vault-relative path of the NEW note, must end in .md and not exist yet, e.g. '00 Kontext/Marketing-Video-Skript.md'."),
     content: z.string().min(1).describe("Markdown content for the note."),
   },

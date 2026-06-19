@@ -5,6 +5,7 @@ import path from "node:path";
 import matter from "gray-matter";
 import {
   appendUnderSection,
+  isProtectedRootFile,
   listProjectHubs,
   noteSizeHint,
   resolveProjectHubFile,
@@ -226,5 +227,21 @@ describe("listProjectHubs", () => {
       path.join(os.tmpdir(), "vault-projekte-does-not-exist-xyz"),
     );
     expect(hubs).toEqual([]);
+  });
+});
+
+describe("isProtectedRootFile", () => {
+  test("flags the root rule files", () => {
+    expect(isProtectedRootFile("AGENTS.md")).toBe(true);
+    expect(isProtectedRootFile("CLAUDE.md")).toBe(true);
+    expect(isProtectedRootFile("./CLAUDE.md")).toBe(true);
+  });
+  test("flags ..-traversal that resolves to a root rule file", () => {
+    expect(isProtectedRootFile("00 Kontext/../AGENTS.md")).toBe(true);
+    expect(isProtectedRootFile("a/b/../../CLAUDE.md")).toBe(true);
+  });
+  test("does not flag normal notes", () => {
+    expect(isProtectedRootFile("00 Kontext/Pitch.md")).toBe(false);
+    expect(isProtectedRootFile("AGENTS.md.bak")).toBe(false);
   });
 });

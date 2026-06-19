@@ -3,6 +3,7 @@
 // CAS conflict. Frontmatter `updated` is stamped here (single source of truth).
 import matter from "gray-matter";
 import { escapeRegex, timestampBerlin, todayBerlin } from "./vault.js";
+import { SectionConflictError, SectionNotFoundError } from "./errors.js";
 
 interface InitMeta {
   title?: string;
@@ -97,4 +98,46 @@ export function splitNoteContent(
     body.slice(contentEnd);
   const source = serialize(parsed.data, newBody);
   return { source, target, extractedEmpty: extracted.length === 0 };
+}
+
+/** Locate a `## section` body: from after the header to the next `#`/`##` (incl. its `###`). */
+function locateSection(
+  body: string,
+  section: string,
+): { sectionStart: number; contentStart: number; contentEnd: number } {
+  const headerRegex = new RegExp(`^## ${escapeRegex(section)}\\s*$`, "m");
+  const headerMatch = body.match(headerRegex);
+  if (!headerMatch || headerMatch.index === undefined) {
+    throw new SectionNotFoundError(section);
+  }
+  const sectionStart = headerMatch.index;
+  const contentStart = sectionStart + headerMatch[0].length;
+  const remainder = body.slice(contentStart);
+  const nextMatch = remainder.match(/^#{1,2} /m);
+  const contentEnd =
+    nextMatch && nextMatch.index !== undefined ? contentStart + nextMatch.index : body.length;
+  return { sectionStart, contentStart, contentEnd };
+}
+
+/** Replace the body under `## section` after a trim-normalized expected-text guard. */
+export function replaceSectionContent(
+  raw: string,
+  section: string,
+  newContent: string,
+  expectedCurrent: string,
+): string {
+  const parsed = matter(raw);
+  const body = parsed.content;
+  const { contentStart, contentEnd } = locateSection(body, section);
+  const current = body.slice(contentStart, contentEnd).trim();
+  if (current !== expectedCurrent.trim()) {
+    throw new SectionConflictError(section, current);
+  }
+  const newBody =
+    body.slice(0, contentStart).replace(/\s+$/, "") +
+    "\n\n" +
+    newContent.trim() +
+    "\n\n" +
+    body.slice(contentEnd);
+  return serialize(parsed.data, newBody);
 }

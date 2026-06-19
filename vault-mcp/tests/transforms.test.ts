@@ -3,7 +3,14 @@ import {
   appendUnderSectionContent,
   createNoteContent,
   splitNoteContent,
+  replaceSectionContent,
+  removeSection,
+  createNoteFromContent,
 } from "../src/lib/transforms.js";
+import {
+  SectionConflictError,
+  SectionNotFoundError,
+} from "../src/lib/errors.js";
 
 describe("appendUnderSectionContent", () => {
   test("creates a fresh note when raw is null", () => {
@@ -52,5 +59,38 @@ describe("splitNoteContent", () => {
     expect(source).toContain("ausgelagert nach [[Sub]]");
     expect(source).not.toContain("m-body");
     expect(source).toContain("## Keep");
+  });
+});
+
+const SECTION_NOTE = "---\ntags: [projekt]\n---\n\n# T\n\n## Alpha\n\n- alt\n\n### Detail\n\n- d1\n\n## Beta\n\n- b1\n";
+
+describe("replaceSectionContent", () => {
+  test("replaces a section body (incl. ### subsections) up to the next ##", () => {
+    const out = replaceSectionContent(SECTION_NOTE, "Alpha", "- neu", "- alt\n\n### Detail\n\n- d1");
+    expect(out).toContain("- neu");
+    expect(out).not.toContain("- alt");
+    expect(out).not.toContain("### Detail");
+    expect(out).toContain("## Alpha"); // header preserved
+    expect(out).toContain("## Beta"); // neighbour untouched
+    expect(out).toContain("- b1");
+  });
+
+  test("throws SectionConflictError carrying the actual block when expected mismatches", () => {
+    try {
+      replaceSectionContent(SECTION_NOTE, "Alpha", "- neu", "- something else");
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(SectionConflictError);
+      expect((e as SectionConflictError).actual).toContain("- alt");
+    }
+  });
+
+  test("throws SectionNotFoundError for a missing section", () => {
+    expect(() => replaceSectionContent(SECTION_NOTE, "Nope", "x", "y")).toThrow(SectionNotFoundError);
+  });
+
+  test("comparison is trim-normalized", () => {
+    const out = replaceSectionContent(SECTION_NOTE, "Beta", "- b2", "  - b1  \n");
+    expect(out).toContain("- b2");
   });
 });

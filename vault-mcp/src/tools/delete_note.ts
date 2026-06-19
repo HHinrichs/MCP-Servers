@@ -17,14 +17,21 @@ export const deleteNoteTool = {
     if (isProtectedRootFile(from)) {
       return err("AGENTS.md / CLAUDE.md im Vault-Root sind die Regelquelle des Servers und dürfen nicht gelöscht werden.");
     }
-    if ((await readIfExists(resolveVaultPath(from))) === null) {
+    let srcAbs: string;
+    try {
+      srcAbs = resolveVaultPath(from);
+    } catch {
+      return err(`Pfad verlässt das Vault, abgebrochen: ${from}`);
+    }
+    if ((await readIfExists(srcAbs)) === null) {
       return err(`Notiz existiert nicht: ${from}`);
     }
     const relPosix = from.split(/[\\/]/).join("/").replace(/^(\.\/)+/, "");
     let archiveRel = `06 Archiv/${relPosix}`;
     if ((await readIfExists(resolveVaultPath(archiveRel))) !== null) {
       const stamp = timestampBerlin().replace(/[: ]/g, "-");
-      archiveRel = archiveRel.replace(/\.md$/, `_${stamp}.md`);
+      const stamped = archiveRel.replace(/\.md$/, `_${stamp}.md`);
+      archiveRel = stamped !== archiveRel ? stamped : `${archiveRel}_${stamp}`;
     }
     await getWriter().writeMulti(
       [from],

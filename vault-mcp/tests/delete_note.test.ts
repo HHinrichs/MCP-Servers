@@ -34,10 +34,15 @@ describe("delete_note", () => {
     await makeNote(`06 Archiv/${dir}/N.md`, "# alt\n");
     const res = await deleteNoteTool.handler({ path: `${dir}/N.md` });
     expect(res.isError).toBeUndefined();
-    // original archive file untouched, a second (suffixed) file now exists
     const archiveDir = path.join(vaultPath(), "06 Archiv", dir);
     const entries = await fs.readdir(archiveDir);
     expect(entries.length).toBe(2);
+    // original archive entry untouched
+    expect(await fs.readFile(path.join(archiveDir, "N.md"), "utf8")).toBe("# alt\n");
+    // the suffixed entry carries the soft-deleted source content
+    const suffixed = entries.find((e) => e !== "N.md");
+    expect(suffixed).toBeDefined();
+    expect(await fs.readFile(path.join(archiveDir, suffixed!), "utf8")).toContain("# Note");
   });
 
   test("errors when the note is missing", async () => {

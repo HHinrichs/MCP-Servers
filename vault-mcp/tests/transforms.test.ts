@@ -94,3 +94,22 @@ describe("replaceSectionContent", () => {
     expect(out).toContain("- b2");
   });
 });
+
+describe("removeSection", () => {
+  test("removes header + body + subsections, leaves neighbours intact", () => {
+    const out = removeSection(SECTION_NOTE, "Alpha", "- alt\n\n### Detail\n\n- d1");
+    expect(out).not.toContain("## Alpha");
+    expect(out).not.toContain("- alt");
+    expect(out).not.toContain("### Detail");
+    expect(out).toContain("## Beta");
+    expect(out).toContain("- b1");
+  });
+
+  test("throws SectionConflictError on mismatch", () => {
+    expect(() => removeSection(SECTION_NOTE, "Alpha", "wrong")).toThrow(SectionConflictError);
+  });
+
+  test("throws SectionNotFoundError when missing", () => {
+    expect(() => removeSection(SECTION_NOTE, "Nope", "x")).toThrow(SectionNotFoundError);
+  });
+});

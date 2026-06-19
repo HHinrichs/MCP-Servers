@@ -141,3 +141,18 @@ export function replaceSectionContent(
     body.slice(contentEnd);
   return serialize(parsed.data, newBody);
 }
+
+/** Remove `## section` (header + body + subsections) after a trim-normalized guard. */
+export function removeSection(raw: string, section: string, expectedCurrent: string): string {
+  const parsed = matter(raw);
+  const body = parsed.content;
+  const { sectionStart, contentStart, contentEnd } = locateSection(body, section);
+  const current = body.slice(contentStart, contentEnd).trim();
+  if (current !== expectedCurrent.trim()) {
+    throw new SectionConflictError(section, current);
+  }
+  const before = body.slice(0, sectionStart).replace(/\s+$/, "");
+  const after = body.slice(contentEnd).replace(/^\s+/, "");
+  const newBody = before + (before && after ? "\n\n" : "") + after + (after ? "" : "\n");
+  return serialize(parsed.data, newBody);
+}

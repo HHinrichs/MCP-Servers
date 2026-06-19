@@ -3,7 +3,14 @@ import {
   appendUnderSectionContent,
   createNoteContent,
   splitNoteContent,
+  replaceSectionContent,
+  removeSection,
+  createNoteFromContent,
 } from "../src/lib/transforms.js";
+import {
+  SectionConflictError,
+  SectionNotFoundError,
+} from "../src/lib/errors.js";
 
 describe("appendUnderSectionContent", () => {
   test("creates a fresh note when raw is null", () => {
@@ -52,5 +59,103 @@ describe("splitNoteContent", () => {
     expect(source).toContain("ausgelagert nach [[Sub]]");
     expect(source).not.toContain("m-body");
     expect(source).toContain("## Keep");
+  });
+});
+
+const SECTION_NOTE = "---\ntags: [projekt]\n---\n\n# T\n\n## Alpha\n\n- alt\n\n### Detail\n\n- d1\n\n## Beta\n\n- b1\n";
+
+describe("replaceSectionContent", () => {
+  test("replaces a section body (incl. ### subsections) up to the next ##", () => {
+    const out = replaceSectionContent(SECTION_NOTE, "Alpha", "- neu", "- alt\n\n### Detail\n\n- d1");
+    expect(out).toContain("- neu");
+    expect(out).not.toContain("- alt");
+    expect(out).not.toContain("### Detail");
+    expect(out).toContain("## Alpha"); // header preserved
+    expect(out).toContain("## Beta"); // neighbour untouched
+    expect(out).toContain("- b1");
+  });
+
+  test("throws SectionConflictError carrying the actual block when expected mismatches", () => {
+    expect.assertions(2);
+    try {
+      replaceSectionContent(SECTION_NOTE, "Alpha", "- neu", "- something else");
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(SectionConflictError);
+      expect((e as SectionConflictError).actual).toContain("- alt");
+    }
+  });
+
+  test("throws SectionNotFoundError for a missing section", () => {
+    expect(() => replaceSectionContent(SECTION_NOTE, "Nope", "x", "y")).toThrow(SectionNotFoundError);
+  });
+
+  test("comparison is trim-normalized", () => {
+    const out = replaceSectionContent(SECTION_NOTE, "Beta", "- b2", "  - b1  \n");
+    expect(out).toContain("- b2");
+  });
+
+  test("replaces the last section without a trailing blank line", () => {
+    const out = replaceSectionContent(SECTION_NOTE, "Beta", "- b2", "- b1");
+    expect(out).toContain("- b2");
+    expect(out).not.toContain("- b1");
+    expect(out).toContain("## Alpha");
+    expect(out).not.toMatch(/\n\n$/);
+  });
+});
+
+describe("removeSection", () => {
+  test("removes header + body + subsections, leaves neighbours intact", () => {
+    const out = removeSection(SECTION_NOTE, "Alpha", "- alt\n\n### Detail\n\n- d1");
+    expect(out).not.toContain("## Alpha");
+    expect(out).not.toContain("- alt");
+    expect(out).not.toContain("### Detail");
+    expect(out).toContain("## Beta");
+    expect(out).toContain("- b1");
+  });
+
+  test("throws SectionConflictError on mismatch", () => {
+    expect(() => removeSection(SECTION_NOTE, "Alpha", "wrong")).toThrow(SectionConflictError);
+  });
+
+  test("throws SectionNotFoundError when missing", () => {
+    expect(() => removeSection(SECTION_NOTE, "Nope", "x")).toThrow(SectionNotFoundError);
+  });
+
+  test("removes the last section cleanly (no trailing blank line)", () => {
+    const out = removeSection(SECTION_NOTE, "Beta", "- b1");
+    expect(out).not.toContain("## Beta");
+    expect(out).toContain("## Alpha");
+    expect(out).not.toMatch(/\n\n$/);
+  });
+});
+
+describe("createNoteFromContent", () => {
+  test("wraps bare content with frontmatter + H1 from the title", () => {
+    const out = createNoteFromContent("Hallo Welt", "Mein Titel");
+    expect(out).toMatch(/^---/);
+    expect(out).toContain("# Mein Titel");
+    expect(out).toContain("Hallo Welt");
+    expect(out).toMatch(/updated:/);
+    expect(out).toMatch(/erstellt:/);
+  });
+
+  test("does not add a second H1 when content already starts with a heading", () => {
+    const out = createNoteFromContent("# Eigener Titel\n\nrumpf", "Dateiname");
+    expect(out).toContain("# Eigener Titel");
+    expect(out).not.toContain("# Dateiname");
+  });
+
+  test("passes through content that already has its own frontmatter (re-stamps updated)", () => {
+    const out = createNoteFromContent("---\ntags: [x]\n---\n\n# A\n\nb", "Ignored");
+    expect(out).toContain("# A");
+    expect(out).toContain("b");
+    expect(out).toMatch(/tags:/);
+    expect(out).not.toContain("# Ignored");
+  });
+
+  test("pass-through injects erstellt when the provided frontmatter lacks it", () => {
+    const out = createNoteFromContent("---\ntags: [x]\n---\n\n# A\n\nb", "Ignored");
+    expect(out).toMatch(/erstellt:/);
   });
 });

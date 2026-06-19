@@ -13,6 +13,10 @@ import { listInboxTool } from "./list_inbox.js";
 import { moveNoteTool } from "./move_note.js";
 import { splitNoteTool } from "./split_note.js";
 import { getBriefingTool } from "./get_briefing.js";
+import { editSectionTool } from "./edit_section.js";
+import { deleteSectionTool } from "./delete_section.js";
+import { deleteNoteTool } from "./delete_note.js";
+import { createNoteTool } from "./create_note.js";
 
 const ALL_TOOLS = [
   quickDumpTool,
@@ -29,6 +33,10 @@ const ALL_TOOLS = [
   moveNoteTool,
   splitNoteTool,
   getBriefingTool,
+  editSectionTool,
+  deleteSectionTool,
+  deleteNoteTool,
+  createNoteTool,
 ];
 
 export function registerAllTools(server: McpServer): void {

@@ -3,6 +3,7 @@
 // CAS conflict. Frontmatter `updated` is stamped here (single source of truth).
 import matter from "gray-matter";
 import { escapeRegex, timestampBerlin, todayBerlin } from "./vault.js";
+import { SectionConflictError, SectionNotFoundError } from "./errors.js";
 
 interface InitMeta {
   title?: string;
@@ -97,4 +98,74 @@ export function splitNoteContent(
     body.slice(contentEnd);
   const source = serialize(parsed.data, newBody);
   return { source, target, extractedEmpty: extracted.length === 0 };
+}
+
+/** Locate a `## section` body: from after the header to the next `#`/`##` (incl. its `###`). */
+function locateSection(
+  body: string,
+  section: string,
+): { sectionStart: number; contentStart: number; contentEnd: number } {
+  const headerRegex = new RegExp(`^## ${escapeRegex(section)}\\s*$`, "m");
+  const headerMatch = body.match(headerRegex);
+  if (!headerMatch || headerMatch.index === undefined) {
+    throw new SectionNotFoundError(section);
+  }
+  const sectionStart = headerMatch.index;
+  const contentStart = sectionStart + headerMatch[0].length;
+  const remainder = body.slice(contentStart);
+  const nextMatch = remainder.match(/^#{1,2} /m);
+  const contentEnd =
+    nextMatch && nextMatch.index !== undefined ? contentStart + nextMatch.index : body.length;
+  return { sectionStart, contentStart, contentEnd };
+}
+
+/** Replace the body under `## section` after a trim-normalized expected-text guard. */
+export function replaceSectionContent(
+  raw: string,
+  section: string,
+  newContent: string,
+  expectedCurrent: string,
+): string {
+  const parsed = matter(raw);
+  const body = parsed.content;
+  const { contentStart, contentEnd } = locateSection(body, section);
+  const current = body.slice(contentStart, contentEnd).trim();
+  if (current !== expectedCurrent.trim()) {
+    throw new SectionConflictError(section, current);
+  }
+  const tail = body.slice(contentEnd);
+  const newBody =
+    body.slice(0, contentStart).replace(/\s+$/, "") +
+    "\n\n" +
+    newContent.trim() +
+    (tail ? "\n\n" : "\n") +
+    tail;
+  return serialize(parsed.data, newBody);
+}
+
+/** Remove `## section` (header + body + subsections) after a trim-normalized guard. */
+export function removeSection(raw: string, section: string, expectedCurrent: string): string {
+  const parsed = matter(raw);
+  const body = parsed.content;
+  const { sectionStart, contentStart, contentEnd } = locateSection(body, section);
+  const current = body.slice(contentStart, contentEnd).trim();
+  if (current !== expectedCurrent.trim()) {
+    throw new SectionConflictError(section, current);
+  }
+  const before = body.slice(0, sectionStart).replace(/\s+$/, "");
+  const after = body.slice(contentEnd).replace(/^\s+/, "");
+  const newBody = before + (before && after ? "\n\n" : "") + after + (after ? "" : "\n");
+  return serialize(parsed.data, newBody);
+}
+
+/** Build a new note from user content: pass through if it already has frontmatter,
+ *  else wrap with minimal frontmatter and an H1 from the title. */
+export function createNoteFromContent(content: string, title: string): string {
+  if (content.startsWith("---")) {
+    const parsed = matter(content);
+    return serialize({ erstellt: todayBerlin(), ...parsed.data }, parsed.content);
+  }
+  const trimmed = content.trim();
+  const body = trimmed.startsWith("#") ? `\n${trimmed}\n` : `\n# ${title}\n\n${trimmed}\n`;
+  return serialize({ tags: [], erstellt: todayBerlin() }, body);
 }

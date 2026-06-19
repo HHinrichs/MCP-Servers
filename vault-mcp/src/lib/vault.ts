@@ -110,8 +110,13 @@ export function escapeRegex(s: string): string {
 const PROTECTED_ROOT_FILES = new Set(["AGENTS.md", "CLAUDE.md"]);
 
 export function isProtectedRootFile(rel: string): boolean {
-  const norm = rel.replace(/\\/g, "/").replace(/^(\.\/)+/, "");
-  return PROTECTED_ROOT_FILES.has(norm);
+  const stack: string[] = [];
+  for (const part of rel.replace(/\\/g, "/").split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") stack.pop();
+    else stack.push(part);
+  }
+  return PROTECTED_ROOT_FILES.has(stack.join("/"));
 }
 
 /**

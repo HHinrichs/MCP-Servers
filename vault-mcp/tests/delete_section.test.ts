@@ -40,6 +40,7 @@ describe("delete_section", () => {
       file: `${dir}/N.md`, section: "Alpha", expected_current: "- anders",
     });
     expect(res.isError).toBe(true);
+    expect((res.content[0] as { text: string }).text).toContain("- alt");
     expect(await fs.readFile(abs, "utf8")).toBe(NOTE);
   });
 

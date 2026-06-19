@@ -156,3 +156,15 @@ export function removeSection(raw: string, section: string, expectedCurrent: str
   const newBody = before + (before && after ? "\n\n" : "") + after + (after ? "" : "\n");
   return serialize(parsed.data, newBody);
 }
+
+/** Build a new note from user content: pass through if it already has frontmatter,
+ *  else wrap with minimal frontmatter and an H1 from the title. */
+export function createNoteFromContent(content: string, title: string): string {
+  if (content.startsWith("---")) {
+    const parsed = matter(content);
+    return serialize(parsed.data, parsed.content);
+  }
+  const trimmed = content.trim();
+  const body = trimmed.startsWith("#") ? `\n${trimmed}\n` : `\n# ${title}\n\n${trimmed}\n`;
+  return serialize({ tags: [], erstellt: todayBerlin() }, body);
+}

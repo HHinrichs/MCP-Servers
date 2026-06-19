@@ -113,3 +113,28 @@ describe("removeSection", () => {
     expect(() => removeSection(SECTION_NOTE, "Nope", "x")).toThrow(SectionNotFoundError);
   });
 });
+
+describe("createNoteFromContent", () => {
+  test("wraps bare content with frontmatter + H1 from the title", () => {
+    const out = createNoteFromContent("Hallo Welt", "Mein Titel");
+    expect(out).toMatch(/^---/);
+    expect(out).toContain("# Mein Titel");
+    expect(out).toContain("Hallo Welt");
+    expect(out).toMatch(/updated:/);
+    expect(out).toMatch(/erstellt:/);
+  });
+
+  test("does not add a second H1 when content already starts with a heading", () => {
+    const out = createNoteFromContent("# Eigener Titel\n\nrumpf", "Dateiname");
+    expect(out).toContain("# Eigener Titel");
+    expect(out).not.toContain("# Dateiname");
+  });
+
+  test("passes through content that already has its own frontmatter (re-stamps updated)", () => {
+    const out = createNoteFromContent("---\ntags: [x]\n---\n\n# A\n\nb", "Ignored");
+    expect(out).toContain("# A");
+    expect(out).toContain("b");
+    expect(out).toMatch(/tags:/);
+    expect(out).not.toContain("# Ignored");
+  });
+});

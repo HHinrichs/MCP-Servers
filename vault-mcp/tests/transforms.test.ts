@@ -76,6 +76,7 @@ describe("replaceSectionContent", () => {
   });
 
   test("throws SectionConflictError carrying the actual block when expected mismatches", () => {
+    expect.assertions(2);
     try {
       replaceSectionContent(SECTION_NOTE, "Alpha", "- neu", "- something else");
       throw new Error("should have thrown");
@@ -92,6 +93,14 @@ describe("replaceSectionContent", () => {
   test("comparison is trim-normalized", () => {
     const out = replaceSectionContent(SECTION_NOTE, "Beta", "- b2", "  - b1  \n");
     expect(out).toContain("- b2");
+  });
+
+  test("replaces the last section without a trailing blank line", () => {
+    const out = replaceSectionContent(SECTION_NOTE, "Beta", "- b2", "- b1");
+    expect(out).toContain("- b2");
+    expect(out).not.toContain("- b1");
+    expect(out).toContain("## Alpha");
+    expect(out).not.toMatch(/\n\n$/);
   });
 });
 
@@ -111,6 +120,13 @@ describe("removeSection", () => {
 
   test("throws SectionNotFoundError when missing", () => {
     expect(() => removeSection(SECTION_NOTE, "Nope", "x")).toThrow(SectionNotFoundError);
+  });
+
+  test("removes the last section cleanly (no trailing blank line)", () => {
+    const out = removeSection(SECTION_NOTE, "Beta", "- b1");
+    expect(out).not.toContain("## Beta");
+    expect(out).toContain("## Alpha");
+    expect(out).not.toMatch(/\n\n$/);
   });
 });
 
@@ -136,5 +152,10 @@ describe("createNoteFromContent", () => {
     expect(out).toContain("b");
     expect(out).toMatch(/tags:/);
     expect(out).not.toContain("# Ignored");
+  });
+
+  test("pass-through injects erstellt when the provided frontmatter lacks it", () => {
+    const out = createNoteFromContent("---\ntags: [x]\n---\n\n# A\n\nb", "Ignored");
+    expect(out).toMatch(/erstellt:/);
   });
 });

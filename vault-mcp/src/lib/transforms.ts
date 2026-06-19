@@ -133,12 +133,13 @@ export function replaceSectionContent(
   if (current !== expectedCurrent.trim()) {
     throw new SectionConflictError(section, current);
   }
+  const tail = body.slice(contentEnd);
   const newBody =
     body.slice(0, contentStart).replace(/\s+$/, "") +
     "\n\n" +
     newContent.trim() +
-    "\n\n" +
-    body.slice(contentEnd);
+    (tail ? "\n\n" : "\n") +
+    tail;
   return serialize(parsed.data, newBody);
 }
 
@@ -162,7 +163,7 @@ export function removeSection(raw: string, section: string, expectedCurrent: str
 export function createNoteFromContent(content: string, title: string): string {
   if (content.startsWith("---")) {
     const parsed = matter(content);
-    return serialize(parsed.data, parsed.content);
+    return serialize({ erstellt: todayBerlin(), ...parsed.data }, parsed.content);
   }
   const trimmed = content.trim();
   const body = trimmed.startsWith("#") ? `\n${trimmed}\n` : `\n# ${title}\n\n${trimmed}\n`;
